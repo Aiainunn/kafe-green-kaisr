@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kafe Green - Sistem Kasir & Manajemen POS</title>
+  <meta name="description" content="Aplikasi kasir dan manajemen penjualan modern untuk Kafe Green. Cepat, akurat, dan terintegrasi.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-light">
+  <!-- AUDIO ELEMENTS CREATED DYNAMICALLY VIA WEB AUDIO API -->
+
+  <!-- LOGIN SCREEN -->
+  <div id="loginSection" class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-logo-badge">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 8h1a4 4 0 1 1 0 8h-1"></path>
+            <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path>
+            <line x1="6" y1="2" x2="6" y2="4"></line>
+            <line x1="10" y1="2" x2="10" y2="4"></line>
+            <line x1="14" y1="2" x2="14" y2="4"></line>
+          </svg>
+        </div>
+        <h1>Kafe Green</h1>
+        <p class="brand-subtitle">Point of Sale & Management System</p>
+      </div>
+
+      <form id="loginForm" class="auth-form" onsubmit="event.preventDefault(); handleLogin();">
+        <div class="form-group">
+          <label for="usernameInput">Username</label>
+          <div class="input-with-icon">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <input type="text" id="usernameInput" placeholder="Masukkan username" value="kasir" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="passwordInput">Password</label>
+          <div class="input-with-icon">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <input type="password" id="passwordInput" placeholder="Masukkan password" value="kasir_kafe123" required autocomplete="current-password">
+            <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility()" title="Lihat password">
+              <svg id="pwEyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="quick-credentials">
+          <span class="quick-hint">Pilih Akun Demo:</span>
+          <div class="quick-btns">
+            <button type="button" class="btn-chip active" onclick="setQuickLogin('kasir', 'kasir_kafe123', 'Kasir Kafe')">Kasir (Staff)</button>
+            <button type="button" class="btn-chip" onclick="setQuickLogin('admin', 'admin_cafe123', 'Manager Admin')">Manager (Admin)</button>
+          </div>
+        </div>
+
+        <div id="loginError" class="login-alert hidden">Username atau password salah!</div>
+
+        <button type="submit" id="btnLoginSubmit" class="btn btn-primary btn-block btn-lg">
+          <span>Masuk ke Sistem</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <p>&copy; 2026 Kafe Green. Rasa Alami, Semangat Sejati.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP WRAPPER (Shown after login) -->
+  <div id="appContainer" class="app-layout hidden">
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="app-sidebar" id="appSidebar">
+      <div class="sidebar-header">
+        <div class="brand-inline">
+          <div class="brand-mini-badge">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 8h1a4 4 0 1 1 0 8h-1"></path>
+              <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path>
+              <line x1="6" y1="2" x2="6" y2="4"></line>
+              <line x1="10" y1="2" x2="10" y2="4"></line>
+              <line x1="14" y1="2" x2="14" y2="4"></line>
+            </svg>
+          </div>
+          <div>
+            <h2 class="sidebar-title">Kafe Green</h2>
+            <span class="sidebar-tagline">POS v2.6 Pro</span>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="9"></rect>
+            <rect x="14" y="3" width="7" height="5"></rect>
+            <rect x="14" y="12" width="7" height="9"></rect>
+            <rect x="3" y="16" width="7" height="5"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </button>
+
+        <button class="nav-item" data-view="pos" onclick="switchView('pos')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
+          <span>Kasir / Pemesanan</span>
+          <span class="badge-counter" id="cartPillCount" style="display: none;">0</span>
+        </button>
+
+        <button class="nav-item" data-view="menuList" onclick="switchView('menuList')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Daftar Menu</span>
+        </button>
+
+        <button class="nav-item" data-view="menuManage" onclick="switchView('menuManage')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          <span>Kelola Menu</span>
+        </button>
+
+        <button class="nav-item" data-view="history" onclick="switchView('history')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>Riwayat Transaksi</span>
+        </button>
+
+        <button class="nav-item" data-view="reports" onclick="switchView('reports')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          <span>Laporan Penjualan</span>
+        </button>
+
+        <button class="nav-item" data-view="settings" onclick="switchView('settings')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>Pengaturan Kafe</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-user">
+        <div class="user-avatar" id="userAvatar">K</div>
+        <div class="user-details">
+          <div class="user-name" id="userNameLabel">Kasir Kafe</div>
+          <div class="user-role" id="userRoleLabel">Staff Shift Pagi</div>
+        </div>
+        <button class="btn-logout" onclick="handleLogout()" title="Keluar / Logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="app-main">
+      <!-- TOP HEADER BAR -->
+      <header class="app-header">
+        <div class="header-left">
+          <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div>
+            <h1 class="page-title" id="pageTitle">Dashboard Penjualan</h1>
+            <p class="page-subtitle" id="pageSubtitle">Ringkasan performa operasional & penjualan hari ini</p>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div class="live-clock-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="liveClockDisplay">Selasa, 06 Okt 2026 - 13:53 WIB</span>
+          </div>
+
+          <button class="header-icon-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Ganti tema terang/gelap" aria-label="Ganti tema">
+            <svg id="themeSunIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+            </svg>
+            <svg id="themeMoonIcon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+          </button>
+
+          <button class="header-icon-btn" id="soundToggleBtn" onclick="toggleSound()" title="Aktif/Nonaktif Suara">
+            <svg id="soundOnIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <svg id="soundOffIcon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            </svg>
+          </button>
+
+          <button class="btn btn-emerald btn-sm" onclick="switchView('pos')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Buka Kasir</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEW 1: DASHBOARD -->
+      <section id="viewDashboard" class="view-panel active">
+        <!-- STATS CARDS -->
+        <div class="stats-grid">
+          <div class="stat-card primary-gradient">
+            <div class="stat-header">
+              <span class="stat-label">Penjualan Hari Ini</span>
+              <div class="stat-icon-wrapper">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="1" x2="12" y2="23"></line>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="dashTodayRevenue">Rp 0</div>
+            <div class="stat-footer">
+              <span class="stat-trend positive" id="dashRevenueTrend">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                  <polyline points="17 6 23 6 23 12"></polyline>
+                </svg>
+                +18.4%
+              </span>
+              <span class="stat-comparison">dibanding kemarin</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Jumlah Transaksi Hari Ini</span>
+              <div class="stat-icon-wrapper icon-teal">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-2z"></path>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <path d="M16 10a4 4 0 0 1-8 0"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="dashTodayOrders">0 Transaksi</div>
+            <div class="stat-footer">
+              <span class="stat-trend positive" id="dashOrdersTrend">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                </svg>
+                Aktif
+              </span>
+              <span class="stat-comparison" id="dashAvgOrderValue">Rata-rata: Rp 0</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Total Pendapatan (Semua)</span>
+              <div class="stat-icon-wrapper icon-amber">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="dashTotalRevenue">Rp 0</div>
+            <div class="stat-footer">
+              <span class="stat-subtext" id="dashTotalTransactionsCount">0 Total Transaksi Tercatat</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Status Menu Aktif</span>
+              <div class="stat-icon-wrapper icon-emerald">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="dashAvailableMenuCount">0 / 0 Menu</div>
+            <div class="stat-footer">
+              <span class="stat-badge green-badge" id="dashStockBadge">Semua Menu Siap</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- DASHBOARD CHARTS & RECENT ACTIVITIES -->
+        <div class="dashboard-grid">
+          <!-- HOURLY SALES CHART -->
+          <div class="card card-chart">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Tren Penjualan Hari Ini (Per Jam)</h3>
+                <p class="card-subtitle">Aktivitas pesanan real-time dari pagi hingga malam</p>
+              </div>
+              <span class="pill-badge pill-live">● Live POS</span>
+            </div>
+            <div class="chart-container">
+              <canvas id="hourlySalesCanvas" width="600" height="220"></canvas>
+            </div>
+            <div class="chart-legend-row" id="hourlyChartLegend">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- BEST SELLER ITEMS -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">Menu Paling Laris (Top 5)</h3>
+                <p class="card-subtitle">Favorit pelanggan Kafe Green</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="switchView('reports')">Lihat Semua</button>
+            </div>
+            <div class="best-sellers-list" id="dashBestSellersList">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- RECENT TRANSACTIONS TABLE -->
+        <div class="card mt-4">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Transaksi Terkini Hari Ini</h3>
+              <p class="card-subtitle">Daftar struk yang baru saja diselesaikan kasir</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="switchView('history')">
+              Buka Riwayat Lengkap
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>No. Transaksi</th>
+                  <th>Jam</th>
+                  <th>Tipe Pesanan</th>
+                  <th>Menu Dipesan</th>
+                  <th>Metode</th>
+                  <th>Total</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="dashRecentOrdersBody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: KASIR / PEMESANAN (POS) -->
+      <section id="viewPos" class="view-panel">
+        <div class="pos-layout">
+          <!-- LEFT: MENU SELECTION & FILTERS -->
+          <div class="pos-menu-column">
+            <!-- SEARCH & CATEGORY BAR -->
+            <div class="pos-controls-card">
+              <div class="pos-search-wrapper">
+                <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="posSearchInput" placeholder="Cari nama menu (contoh: Kopi Susu, Matcha, Croffle...)" oninput="filterPosMenu()">
+                <button class="clear-search-btn" id="posClearSearch" onclick="clearPosSearch()" title="Reset pencarian" style="display: none;">✕</button>
+              </div>
+
+              <!-- CATEGORY CHIPS -->
+              <div class="category-chips-scroll" id="posCategoryChips">
+                <button class="cat-chip active" data-cat="all" onclick="selectPosCategory('all')">
+                  <span>Semua Menu</span>
+                  <span class="chip-count" id="catCountAll">0</span>
+                </button>
+                <button class="cat-chip" data-cat="Kopi" onclick="selectPosCategory('Kopi')">
+                  <span>Kopi</span>
+                  <span class="chip-count" id="catCountKopi">0</span>
+                </button>
+                <button class="cat-chip" data-cat="Non-Kopi" onclick="selectPosCategory('Non-Kopi')">
+                  <span>Non-Kopi</span>
+                  <span class="chip-count" id="catCountNonKopi">0</span>
+                </button>
+                <button class="cat-chip" data-cat="Makanan" onclick="selectPosCategory('Makanan')">
+                  <span>Makanan</span>
+                  <span class="chip-count" id="catCountMakanan">0</span>
+                </button>
+                <button class="cat-chip" data-cat="Snack" onclick="selectPosCategory('Snack')">
+                  <span>Snack</span>
+                  <span class="chip-count" id="catCountSnack">0</span>
+                </button>
+                
+              </div>
+            </div>
+
+            <!-- PRODUCT GRID -->
+            <div class="pos-products-grid" id="posProductsGrid">
+              <!-- Dynamically populated menu cards -->
+            </div>
+          </div>
+
+          <!-- RIGHT: ORDER CART & CHECKOUT -->
+          <div class="pos-cart-column">
+            <div class="cart-card">
+              <!-- CART HEADER -->
+              <div class="cart-header">
+                <div>
+                  <h3 class="cart-title">Keranjang Pesanan</h3>
+                  <p class="cart-subtitle" id="cartOrderNo">Order #KG-NEW</p>
+                </div>
+                <button class="btn btn-ghost-danger btn-sm" onclick="clearCartConfirm()" title="Kosongkan Keranjang">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  <span>Reset</span>
+                </button>
+              </div>
+
+              <!-- ORDER TYPE & TABLE INFO -->
+              <div class="order-type-selector">
+                <button type="button" class="btn-order-type active" id="btnOrderDineIn" onclick="setOrderType('Dine In')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                  </svg>
+                  <span>Dine In</span>
+                </button>
+                <button type="button" class="btn-order-type" id="btnOrderTakeAway" onclick="setOrderType('Take Away')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-2z"></path>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                  </svg>
+                  <span>Take Away</span>
+                </button>
+                <input type="text" id="orderTableInput" class="table-input" placeholder="No. Meja / Nama" value="Meja 01">
+              </div>
+
+              <!-- CART ITEMS LIST (SCROLLABLE) -->
+              <div class="cart-items-container" id="cartItemsList">
+                <div class="cart-empty-state">
+                  <div class="empty-icon-circle">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <circle cx="9" cy="21" r="1"></circle>
+                      <circle cx="20" cy="21" r="1"></circle>
+                      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                    </svg>
+                  </div>
+                  <p class="empty-title">Keranjang Masih Kosong</p>
+                  <p class="empty-subtitle">Pilih menu di sebelah kiri untuk menambahkan pesanan pelanggan.</p>
+                </div>
+              </div>
+
+              <!-- CART SUMMARY & CALCULATION -->
+              <div class="cart-summary">
+                <div class="summary-line">
+                  <span>Subtotal (<span id="cartTotalItemsCount">0</span> item)</span>
+                  <span class="summary-val" id="cartSubtotalText">Rp 0</span>
+                </div>
+                <div class="summary-line" id="discountLine" style="display: none;">
+                  <span class="text-danger">Diskon Promo</span>
+                  <span class="summary-val text-danger" id="cartDiscountText">- Rp 0</span>
+                </div>
+                <div class="summary-line text-muted">
+                  <span>Pajak Resto (<span id="taxRateLabel">0%</span>)</span>
+                  <span class="summary-val" id="cartTaxText">Rp 0</span>
+                </div>
+                <div class="summary-divider"></div>
+                <div class="summary-total-line">
+                  <div>
+                    <span class="grand-total-label">Total Otomatis</span>
+                    <span class="tax-note">Termasuk PPN jika aktif</span>
+                  </div>
+                  <span class="grand-total-val" id="cartGrandTotalText">Rp 0</span>
+                </div>
+              </div>
+
+              <!-- PAYMENT INPUT ACCORDION -->
+              <div class="payment-action-box">
+                <!-- PAYMENT METHOD SELECTOR -->
+                <div class="payment-method-tabs">
+                  <button type="button" class="pay-method-btn active" data-method="Tunai" onclick="selectPayMethod('Tunai')">
+                    Tunai
+                  </button>
+                  <button type="button" class="pay-method-btn" data-method="QRIS" onclick="selectPayMethod('QRIS')">
+                    QRIS
+                  </button>
+                </div>
+
+                <!-- CASH PAYMENT INPUT (with quick money chips) -->
+                <div id="cashInputSection" class="cash-input-group">
+                  <label for="cashGivenInput" class="cash-label">Input Pembayaran Tunai (Rp)</label>
+                  <div class="cash-input-row">
+                    <span class="currency-prefix">Rp</span>
+                    <input type="number" id="cashGivenInput" placeholder="0" oninput="calculateChange()" min="0">
+                    <button type="button" class="btn-exact-cash" onclick="setExactCash()" title="Uang Pas">Uang Pas</button>
+                  </div>
+
+                  <!-- QUICK DENOMINATIONS -->
+                  <div class="quick-cash-row">
+                    <button type="button" class="btn-cash-chip" onclick="addCashAmount(10000)">+10k</button>
+                    <button type="button" class="btn-cash-chip" onclick="addCashAmount(20000)">+20k</button>
+                    <button type="button" class="btn-cash-chip" onclick="addCashAmount(50000)">+50k</button>
+                    <button type="button" class="btn-cash-chip" onclick="addCashAmount(100000)">+100k</button>
+                  </div>
+
+                  <!-- AUTOMATIC CHANGE DISPLAY -->
+                  <div class="change-display-box" id="changeDisplayBox">
+                    <span class="change-label">Kembalian Otomatis:</span>
+                    <span class="change-value" id="cashChangeDisplay">Rp 0</span>
+                  </div>
+                </div>
+
+                <!-- NON-CASH NOTICE -->
+                <div id="nonCashNotice" class="non-cash-notice hidden">
+                  <div class="notice-icon">✓</div>
+                  <div>
+                    <strong id="nonCashMethodTitle">Pembayaran QRIS</strong>
+                    <p>Nominal pembayaran akan otomatis tercatat sesuai total transaksi (Uang Pas).</p>
+                  </div>
+                </div>
+
+                <!-- SUBMIT ORDER BUTTON -->
+                <button type="button" id="btnProcessPayment" class="btn btn-primary btn-block btn-pay" onclick="processOrder()" disabled>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <span>Proses & Cetak Struk</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: DAFTAR MENU -->
+      <section id="viewMenuList" class="view-panel">
+        <div class="page-top-actions">
+          <div class="search-filter-cluster">
+            <div class="search-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="menuListSearch" placeholder="Cari menu Kafe Green..." oninput="renderMenuListTable()">
+            </div>
+
+            <select id="menuListCatFilter" class="select-filter" onchange="renderMenuListTable()">
+              <option value="all">Semua Kategori</option>
+              <option value="Kopi">Kopi</option>
+              <option value="Non-Kopi">Non-Kopi</option>
+              <option value="Makanan">Makanan</option>
+              <option value="Snack">Snack</option>
+              
+            </select>
+
+            <select id="menuListStockFilter" class="select-filter" onchange="renderMenuListTable()">
+              <option value="all">Semua Ketersediaan</option>
+              <option value="available">Tersedia</option>
+              <option value="unavailable">Habis / Kosong</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" onclick="switchView('menuManage'); openAddMenuModal();">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Tambah Menu Baru</span>
+          </button>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">Daftar Menu Kafe Green</h3>
+              <p class="card-subtitle">Katalog lengkap produk, harga, dan ketersediaan stok</p>
+            </div>
+            <span class="badge-total" id="menuListTotalBadge">Total: 0 Menu</span>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" id="menuListTable">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Foto</th>
+                  <th>Nama Menu</th>
+                  <th>Kategori</th>
+                  <th>Harga Satuan</th>
+                  <th>Ketersediaan Menu</th>
+                  <th style="text-align: right;">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="menuListTableBody">
+                <!-- Dynamically rendered -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: KELOLA MENU (MANAGE / CRUD) -->
+      <section id="viewMenuManage" class="view-panel">
+        <div class="page-top-actions">
+          <div>
+            <h2 class="section-heading">Kelola & Modifikasi Menu</h2>
+            <p class="section-desc">Tambah menu baru, perbarui harga, ketersediaan, atau hapus menu.</p>
+          </div>
+          <button class="btn btn-primary btn-lg" onclick="openAddMenuModal()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="16"></line>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            <span>Tambah Menu Baru</span>
+          </button>
+        </div>
+
+        <!-- QUICK EDIT GRID -->
+        <div class="manage-cards-grid" id="manageMenuGrid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- VIEW 5: RIWAYAT TRANSAKSI -->
+      <section id="viewHistory" class="view-panel">
+        <div class="page-top-actions flex-wrap">
+          <div class="history-filter-group">
+            <div class="btn-group-filters">
+              <button class="btn-filter-tab active" data-range="today" onclick="setHistoryFilter('today')">Transaksi Hari Ini</button>
+              <button class="btn-filter-tab" data-range="yesterday" onclick="setHistoryFilter('yesterday')">Kemarin</button>
+              <button class="btn-filter-tab" data-range="all" onclick="setHistoryFilter('all')">Semua Transaksi</button>
+            </div>
+
+            <div class="date-picker-wrap">
+              <label for="historyDatePicker">Cari Berdasarkan Tanggal:</label>
+              <input type="date" id="historyDatePicker" onchange="filterHistoryBySpecificDate()">
+              <button class="btn btn-ghost btn-xs" onclick="resetHistoryDate()">Reset</button>
+            </div>
+          </div>
+
+          <div class="search-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="historySearchInput" placeholder="Cari no. struk atau kasir..." oninput="renderHistoryTable()">
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title" id="historyTableTitle">Riwayat Struk & Pembayaran</h3>
+              <p class="card-subtitle" id="historyTableSubtitle">Menampilkan riwayat transaksi</p>
+            </div>
+            <div class="history-stats-pill">
+              <span id="historyOrdersCount">0 Transaksi</span>
+              <span class="sep">•</span>
+              <span id="historyTotalSum">Total: Rp 0</span>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>No. Transaksi</th>
+                  <th>Tanggal & Jam</th>
+                  <th>Kasir</th>
+                  <th>Tipe / Meja</th>
+                  <th>Pesanan</th>
+                  <th>Metode</th>
+                  <th>Total</th>
+                  <th>Bayar</th>
+                  <th>Kembalian</th>
+                  <th style="text-align: right;">Struk</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 6: LAPORAN PENJUALAN -->
+      <section id="viewReports" class="view-panel">
+        <div class="report-filters-bar">
+          <div class="report-period-chips">
+            <button class="btn-report-tab active" data-period="today" onclick="setReportPeriod('today')">Penjualan Hari Ini</button>
+            <button class="btn-report-tab" data-period="yesterday" onclick="setReportPeriod('yesterday')">Kemarin</button>
+            <button class="btn-report-tab" data-period="week" onclick="setReportPeriod('week')">Mingguan (7 Hari)</button>
+            <button class="btn-report-tab" data-period="month" onclick="setReportPeriod('month')">Bulanan (Bulan Ini)</button>
+          </div>
+
+          <div class="custom-range-filter">
+            <span>Filter Rentang:</span>
+            <input type="date" id="reportStartDate">
+            <span>s/d</span>
+            <input type="date" id="reportEndDate">
+            <button class="btn btn-outline btn-sm" onclick="applyCustomReportRange()">Terapkan</button>
+          </div>
+
+          <div class="report-actions">
+            <button class="btn btn-ghost" onclick="exportReportCSV()" title="Ekspor ke Excel / CSV">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Export CSV</span>
+            </button>
+            <button class="btn btn-primary" onclick="printReport()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                <rect x="6" y="14" width="12" height="8"></rect>
+              </svg>
+              <span>Cetak Laporan</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- REPORT SUMMARY METRICS -->
+        <div class="stats-grid mt-3">
+          <div class="stat-card primary-gradient">
+            <div class="stat-header">
+              <span class="stat-label">Total Pendapatan Bersih</span>
+              <div class="stat-icon-wrapper">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="1" x2="12" y2="23"></line>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="repTotalIncome">Rp 0</div>
+            <div class="stat-footer">
+              <span class="stat-comparison" id="repPeriodLabel">Periode: Hari Ini</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Total Transaksi Selesai</span>
+              <div class="stat-icon-wrapper icon-teal">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="repTotalTxCount">0 Transaksi</div>
+            <div class="stat-footer">
+              <span class="stat-comparison">Status 100% Lunas</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Rata-rata Keranjang (AOV)</span>
+              <div class="stat-icon-wrapper icon-amber">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="repAvgBasket">Rp 0</div>
+            <div class="stat-footer">
+              <span class="stat-comparison">Rata-rata per pelanggan</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Total Item Terjual</span>
+              <div class="stat-icon-wrapper icon-emerald">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value" id="repTotalItemsQty">0 Porsi/Cup</div>
+            <div class="stat-footer">
+              <span class="stat-comparison">Kuantitas produk keluar</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- REPORT CHARTS & BREAKDOWNS -->
+        <div class="dashboard-grid mt-4">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Penjualan Berdasarkan Kategori Menu</h3>
+              <p class="card-subtitle">Persentase kontribusi omset per kategori</p>
+            </div>
+            <div class="category-breakdown-list" id="repCategoryBreakdown">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Metode Pembayaran Paling Sering</h3>
+              <p class="card-subtitle">Distribusi Tunai vs QRIS</p>
+            </div>
+            <div class="payment-methods-breakdown" id="repPaymentBreakdown">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TOP SELLING TABLE IN REPORT -->
+        <div class="card mt-4">
+          <div class="card-header">
+            <h3 class="card-title">Daftar Produk Terlaris Periode Ini</h3>
+            <p class="card-subtitle">Peringkat menu dengan volume penjualan tertinggi</p>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px;">Rank</th>
+                  <th>Nama Menu</th>
+                  <th>Kategori</th>
+                  <th>Harga Satuan</th>
+                  <th>Kuantitas Terjual</th>
+                  <th>Total Omset</th>
+                </tr>
+              </thead>
+              <tbody id="repTopProductsBody">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 7: PENGATURAN KAFE -->
+      <section id="viewSettings" class="view-panel">
+        <div class="settings-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Profil & Informasi Kafe Green</h3>
+              <p class="card-subtitle">Informasi yang akan tercetak pada header struk kasir</p>
+            </div>
+            <form id="cafeSettingsForm" class="settings-form" onsubmit="event.preventDefault(); saveCafeSettings();">
+              <div class="form-group">
+                <label for="cfgCafeName">Nama Kafe / Usaha</label>
+                <input type="text" id="cfgCafeName" value="Kafe Green" required>
+              </div>
+
+              <div class="form-group">
+                <label for="cfgCafeAddress">Alamat Lengkap</label>
+                <textarea id="cfgCafeAddress" rows="2" required>Jl. Rimbun Hijau No. 88, Kemang, Jakarta Selatan</textarea>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="cfgCafePhone">Nomor Telepon / WhatsApp</label>
+                  <input type="text" id="cfgCafePhone" value="0812-3456-7890">
+                </div>
+                <div class="form-group">
+                  <label for="cfgCafeWifi">Info Wi-Fi Kafe</label>
+                  <input type="text" id="cfgCafeWifi" value="KafeGreen-Guest / kopienak88" placeholder="Nama Wi-Fi / Password">
+                  <small class="form-hint">Format: <strong>Nama Wi-Fi / Password</strong>. Contoh: KafeGreen-Guest / kopienak88</small>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="cfgTaxRate">Tarif PPN / Pajak (%)</label>
+                  <input type="number" id="cfgTaxRate" min="0" max="25" step="1" value="10">
+                  <small class="form-hint">Isi 0 jika harga menu sudah termasuk pajak (nett).</small>
+                </div>
+                <div class="form-group">
+                  <label for="cfgCurrency">Simbol Mata Uang</label>
+                  <input type="text" id="cfgCurrency" value="Rp" readonly>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="cfgReceiptFooter">Catatan Kaki Struk (Footer Message)</label>
+                <textarea id="cfgReceiptFooter" rows="2">Terima kasih atas kunjungan Anda! Follow Instagram @kafegreen.id</textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                <span>Simpan Perubahan Pengaturan</span>
+              </button>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Manajemen Data & Reset</h3>
+              <p class="card-subtitle">Pengaturan database lokal dan reset transaksi</p>
+            </div>
+            <div class="settings-actions-list">
+              <div class="settings-action-item">
+                <div>
+                  <strong>Muat Ulang Data Sampel Kafe Green</strong>
+                  <p class="text-muted">Kembalikan daftar menu lengkap dan transaksi simulasi ke setelan awal pabrik.</p>
+                </div>
+                <button class="btn btn-outline" onclick="resetToSampleData()">Muat Sampel</button>
+              </div>
+
+              <div class="settings-action-item">
+                <div>
+                  <strong>Hapus Semua Transaksi</strong>
+                  <p class="text-muted">Kosongkan semua riwayat struk dan laporan penjualan untuk shift baru.</p>
+                </div>
+                <button class="btn btn-ghost-danger" onclick="clearTransactionsData()">Hapus Transaksi</button>
+              </div>
+
+              <div class="settings-action-item">
+                <div>
+                  <strong>Panduan Shortcut Cepat Kasir</strong>
+                  <p class="text-muted">Ketik pencarian kapan saja, tekan Enter untuk input nominal bayar, klik Uang Pas.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: STRUK TRANSAKSI (RECEIPT) -->
+  <div id="receiptModal" class="modal-backdrop hidden">
+    <div class="modal-dialog modal-receipt-dialog">
+      <div class="modal-header">
+        <div class="modal-title-with-badge">
+          <span class="badge-status-paid">✓ Pembayaran Berhasil</span>
+          <h3 class="modal-title">Struk Bukti Pembayaran</h3>
+        </div>
+        <button class="modal-close-btn" onclick="closeReceiptModal()" aria-label="Tutup">✕</button>
+      </div>
+
+      <div class="modal-body receipt-scrollable-body">
+        <!-- THERMAL RECEIPT CONTAINER -->
+        <div class="thermal-receipt" id="printableReceipt">
+          <div class="receipt-paper">
+            <div class="receipt-decor-zig-top"></div>
+
+            <div class="receipt-header">
+              <div class="receipt-brand-logo">☕</div>
+              <h2 class="receipt-store-name" id="recStoreName">KAFE GREEN</h2>
+              <p class="receipt-address" id="recStoreAddress">Jl. Rimbun Hijau No. 88, Kemang, Jakarta</p>
+              <p class="receipt-contact" id="recStoreContact">Telp: 0812-3456-7890</p>
+            </div>
+
+            <div class="receipt-divider-dashed"></div>
+
+            <div class="receipt-meta-grid">
+              <div class="meta-row">
+                <span>No. Transaksi:</span>
+                <strong id="recOrderNumber">#KG-20261006-0001</strong>
+              </div>
+              <div class="meta-row">
+                <span>Tanggal & Jam:</span>
+                <span id="recOrderDate">06/10/2026 14:15 WIB</span>
+              </div>
+              <div class="meta-row">
+                <span>Kasir:</span>
+                <span id="recCashierName">Kasir Kafe</span>
+              </div>
+              <div class="meta-row">
+                <span>Tipe Order:</span>
+                <strong id="recOrderType">Dine In (Meja 01)</strong>
+              </div>
+            </div>
+
+            <div class="receipt-divider-dashed"></div>
+
+            <!-- RECEIPT ITEMS LIST -->
+            <div class="receipt-items-table" id="recItemsList">
+              <!-- Dynamically populated rows -->
+            </div>
+
+            <div class="receipt-divider-dashed"></div>
+
+            <!-- FINANCIAL TOTALS -->
+            <div class="receipt-totals-table">
+              <div class="receipt-sum-row">
+                <span>Subtotal:</span>
+                <span id="recSubtotal">Rp 0</span>
+              </div>
+              <div class="receipt-sum-row" id="recTaxRow">
+                <span>PPN (10%):</span>
+                <span id="recTax">Rp 0</span>
+              </div>
+              <div class="receipt-sum-row bold-row">
+                <span>TOTAL:</span>
+                <span id="recGrandTotal">Rp 0</span>
+              </div>
+              <div class="receipt-divider-dotted"></div>
+              <div class="receipt-sum-row">
+                <span>Metode Bayar:</span>
+                <span id="recPaymentMethod">Tunai</span>
+              </div>
+              <div class="receipt-sum-row">
+                <span>Bayar:</span>
+                <span id="recPaidAmount">Rp 0</span>
+              </div>
+              <div class="receipt-sum-row change-highlight">
+                <span>Kembalian:</span>
+                <span id="recChangeAmount">Rp 0</span>
+              </div>
+            </div>
+
+            <div class="receipt-divider-dashed"></div>
+
+            <!-- FOOTER & QR CODE PLACEHOLDER -->
+            <div class="receipt-footer">
+              <div class="receipt-barcode">
+                <div class="barcode-lines"></div>
+                <span class="barcode-num" id="recBarcodeId">*KG-20261006-0001*</span>
+              </div>
+              <p class="receipt-thankyou" id="recFooterMessage">Terima kasih atas kunjungan Anda!</p>
+              <p class="receipt-wifi" id="recWifiInfo">Wi-Fi: -</p>
+            </div>
+
+            <div class="receipt-decor-zig-bottom"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer receipt-modal-actions">
+        <button class="btn btn-secondary" onclick="closeReceiptModal()">
+          <span>Selesai / Tutup</span>
+        </button>
+        <button class="btn btn-outline" onclick="copyReceiptText()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>Salin Teks</span>
+        </button>
+        <button class="btn btn-primary" onclick="printReceiptDirectly()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          <span>Cetak Struk (Print)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TAMBAH / EDIT MENU (KELOLA MENU) -->
+  <div id="menuModal" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="menuModalTitle">Tambah Menu Baru</h3>
+        <button class="modal-close-btn" onclick="closeMenuModal()" aria-label="Tutup">✕</button>
+      </div>
+
+      <form id="menuForm" class="modal-body" onsubmit="event.preventDefault(); saveMenuForm();">
+        <input type="hidden" id="menuEditId" value="">
+
+        <div class="form-group">
+          <label for="menuFormName">Nama Menu <span class="text-danger">*</span></label>
+          <input type="text" id="menuFormName" placeholder="Contoh: Kopi Susu Pandan" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="menuFormCategory">Kategori <span class="text-danger">*</span></label>
+            <select id="menuFormCategory" required>
+              <option value="Kopi">Kopi</option>
+              <option value="Non-Kopi">Non-Kopi</option>
+              <option value="Makanan">Makanan</option>
+              <option value="Snack">Snack</option>
+              
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="menuFormPrice">Harga Jual (Rp) <span class="text-danger">*</span></label>
+            <input type="number" id="menuFormPrice" placeholder="25000" min="0" step="500" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="menuFormDesc">Deskripsi Singkat Menu</label>
+          <input type="text" id="menuFormDesc" placeholder="Contoh: Perpaduan espresso robusta & sirup pandan wangi">
+        </div>
+
+        <div class="form-group">
+          <label class="toggle-container">
+            <input type="checkbox" id="menuFormAvailable" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label-text">Ketersediaan Menu: <strong>Tersedia (Ready to Order)</strong></span>
+          </label>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeMenuModal()">Batal</button>
+          <button type="submit" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span id="menuFormSubmitBtnText">Simpan Menu</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="toast-stack"></div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script src="app.js"></script>
+</body>
+</html>
