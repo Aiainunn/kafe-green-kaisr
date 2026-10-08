@@ -170,6 +170,7 @@ function initServerSync() {
 
 async function loadMenuFromMySQL() {
   const result = await apiRequest('/menu');
+
   State.menu = (result.data || []).map(item => ({
     id: String(item.id),
     name: item.nama,
@@ -178,6 +179,12 @@ async function loadMenuFromMySQL() {
     desc: item.deskripsi || '',
     available: Boolean(item.tersedia)
   }));
+
+  console.log('=== MENU DARI DATABASE ===');
+  console.table(State.menu);
+
+  console.log('=== ID MENU ===');
+  console.log(State.menu.map(item => item.id));
 }
 
 async function loadSettingsFromMySQL() {
@@ -216,6 +223,7 @@ async function handleLogin() {
   const errorEl = document.getElementById('loginError');
 
   if (!username || !password) {
+    errorEl.textContent = 'Username dan password wajib diisi.';
     errorEl.classList.remove('hidden');
     return;
   }
@@ -223,10 +231,14 @@ async function handleLogin() {
   try {
     const result = await apiRequest('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({
+        username,
+        password
+      })
     });
 
     const user = result.data;
+
     const roleMap = {
       manager: 'Manager Kafe',
       kasir: 'Staff Shift Kasir',
@@ -241,14 +253,28 @@ async function handleLogin() {
       displayName: user.nama
     };
 
-    localStorage.setItem('kg_auth_user', JSON.stringify(State.currentUser));
+    localStorage.setItem(
+      'kg_auth_user',
+      JSON.stringify(State.currentUser)
+    );
+
     errorEl.classList.add('hidden');
+
     initLoggedInState();
-    showToast(`Selamat datang di Kafe Green, ${State.currentUser.displayName}!`, 'success');
+
+    showToast(
+      `Selamat datang di Kafe Green, ${State.currentUser.displayName}!`,
+      'success'
+    );
+
     sfx.playCashRegister();
+
   } catch (error) {
     console.error('Login gagal:', error);
-    errorEl.textContent = error.message || 'Username atau password salah.';
+
+    errorEl.textContent =
+      error.message || 'Username atau password salah.';
+
     errorEl.classList.remove('hidden');
   }
 }
@@ -257,13 +283,24 @@ async function handleLogin() {
 function setQuickLogin(u, p, name) {
   document.getElementById('usernameInput').value = u;
   document.getElementById('passwordInput').value = p;
-  document.querySelectorAll('.quick-btns .btn-chip').forEach(btn => btn.classList.remove('active'));
-  event.target.classList.add('active');
+
+  document
+    .querySelectorAll('.quick-btns .btn-chip')
+    .forEach(btn => btn.classList.remove('active'));
+
+  if (event && event.target) {
+    event.target.classList.add('active');
+  }
 }
+
 
 function togglePasswordVisibility() {
   const input = document.getElementById('passwordInput');
-  input.type = input.type === 'password' ? 'text' : 'password';
+
+  input.type =
+    input.type === 'password'
+      ? 'text'
+      : 'password';
 }
 
 function handleLogout() {
@@ -277,14 +314,54 @@ function handleLogout() {
 }
 
 function initLoggedInState() {
+
   if (!State.currentUser) return;
+
   document.getElementById('loginSection').classList.add('hidden');
+
   document.getElementById('appContainer').classList.remove('hidden');
-  document.getElementById('userNameLabel').textContent = State.currentUser.displayName;
-  document.getElementById('userRoleLabel').textContent = State.currentUser.role;
-  document.getElementById('userAvatar').textContent = State.currentUser.displayName.charAt(0).toUpperCase();
+
+  document.getElementById('userNameLabel').textContent =
+    State.currentUser.displayName;
+
+  document.getElementById('userRoleLabel').textContent =
+    State.currentUser.role;
+
+  document.getElementById('userAvatar').textContent =
+    State.currentUser.displayName.charAt(0).toUpperCase();
+
+  // Terapkan hak akses berdasarkan role
+  applyRolePermissions();
+
   applySettingsToUI();
+
   switchView('dashboard');
+}
+
+function applyRolePermissions() {
+
+  const role = State.currentUser?.roleCode;
+
+  // Ambil menu navigasi berdasarkan teks/onclick
+  const navItems = document.querySelectorAll('[onclick*="switchView"]');
+
+  navItems.forEach(item => {
+
+    const action = item.getAttribute('onclick') || '';
+
+    // Fitur yang hanya boleh diakses Manager
+    const managerOnly =
+      action.includes("switchView('menuManage')") ||
+      action.includes("switchView('reports')") ||
+      action.includes("switchView('settings')");
+
+    if (role === 'kasir' && managerOnly) {
+      item.classList.add('hidden');
+    } else {
+      item.classList.remove('hidden');
+    }
+
+  });
 }
 
 // --- UTILS ---

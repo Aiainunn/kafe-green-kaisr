@@ -1,9 +1,21 @@
 const express = require('express');
 const path = require('path');
+const session = require('express-session');
 const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'kafe-green-session-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: false,
+        maxAge: 8 * 60 * 60 * 1000
+    }
+}));
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(__dirname));
@@ -16,6 +28,31 @@ function sendError(res, status, message, error = null) {
     if (error) console.error(message, error);
     return res.status(status).json({ berhasil: false, pesan: message });
 }
+
+function requireLogin(req, res, next) {
+    if (!req.session.user) {
+        return sendError(res, 401, 'Silakan login terlebih dahulu.');
+    }
+
+    next();
+}
+
+function requireManager(req, res, next) {
+    if (!req.session.user) {
+        return sendError(res, 401, 'Silakan login terlebih dahulu.');
+    }
+
+    if (req.session.user.peran !== 'manager') {
+        return sendError(
+            res,
+            403,
+            'Akses ditolak. Fitur ini hanya dapat digunakan oleh Manager.'
+        );
+    }
+
+    next();
+}
+
 
 // ============================================================
 // AUTHENTICATION
@@ -40,7 +77,17 @@ app.post('/api/auth/login', async (req, res) => {
             return sendError(res, 401, 'Username atau password salah.');
         }
 
-        res.json({ berhasil: true, data: rows[0] });
+        req.session.user = {
+            id: rows[0].id,
+            username: rows[0].username,
+            nama: rows[0].nama,
+            peran: rows[0].peran
+        };
+
+        res.json({
+            berhasil: true,
+            data: rows[0]
+        });
     } catch (err) {
         sendError(res, 500, 'Gagal melakukan login.', err);
     }
@@ -71,7 +118,7 @@ app.get('/api/menu', async (req, res) => {
     }
 });
 
-app.post('/api/menu', async (req, res) => {
+app.post('/api/menu',requireManager, async (req, res) => {
     const { nama, kategori_id, harga, deskripsi, tersedia } = req.body;
 
     if (!nama || !kategori_id || harga === undefined) {
@@ -90,7 +137,7 @@ app.post('/api/menu', async (req, res) => {
     }
 });
 
-app.put('/api/menu/:id', async (req, res) => {
+app.put('/api/menu/:id', requireManager, async (req, res) => {
     const { nama, kategori_id, harga, deskripsi, tersedia } = req.body;
 
     if (!nama || !kategori_id || harga === undefined) {
@@ -114,7 +161,7 @@ app.put('/api/menu/:id', async (req, res) => {
     }
 });
 
-app.patch('/api/menu/:id/status', async (req, res) => {
+app.patch('/api/menu/:id/status', requireManager, async (req, res) => {
     const { tersedia } = req.body;
 
     try {
@@ -133,7 +180,7 @@ app.patch('/api/menu/:id/status', async (req, res) => {
     }
 });
 
-app.delete('/api/menu/:id', async (req, res) => {
+app.delete('/api/menu/:id', requireManager, async (req, res) => {
     try {
         const [result] = await db.execute('DELETE FROM menu WHERE id = ?', [req.params.id]);
 
@@ -143,9 +190,16 @@ app.delete('/api/menu/:id', async (req, res) => {
 
         res.json({ berhasil: true, pesan: 'Menu berhasil dihapus.' });
     } catch (err) {
-        if (err.code === 'ER_ROW_IS_REFERENCED_2' || err.code === 'ER_ROW_IS_REFERENCED') {
-            return sendError(res, 409, 'Menu tidak dapat dihapus karena sudah digunakan dalam transaksi.');
+
+        // PostgreSQL: menu masih digunakan oleh detail transaksi
+        if (err.code === '23503') {
+            return sendError(
+                res,
+                409,
+                'Menu tidak dapat dihapus karena sudah digunakan dalam transaksi.'
+            );
         }
+
         sendError(res, 500, 'Gagal menghapus menu.', err);
     }
 });
@@ -346,13 +400,29 @@ app.post('/api/transaksi', async (req, res) => {
         await connection.beginTransaction();
 
         const orderNumber = nomor_transaksi || makeOrderNumber();
-        const safeOrderType = tipe_pesanan === 'take_away' ? 'take_away' : 'dine_in';
-        const safePayment = metode_pembayaran === 'qris' ? 'qris' : 'cash';
+        const safeOrderType =
+            tipe_pesanan === 'take_away' ? 'take_away' : 'dine_in';
 
+        const safePayment =
+            metode_pembayaran === 'qris' ? 'qris' : 'cash';
+
+        // Simpan transaksi utama
         const [txResult] = await connection.execute(`
             INSERT INTO transaksi
-            (nomor_transaksi, pengguna_id, tipe_pesanan, nomor_meja, subtotal, pajak, total, dibayar, kembalian, metode_pembayaran)
+            (
+                nomor_transaksi,
+                pengguna_id,
+                tipe_pesanan,
+                nomor_meja,
+                subtotal,
+                pajak,
+                total,
+                dibayar,
+                kembalian,
+                metode_pembayaran
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
         `, [
             orderNumber,
             pengguna_id,
@@ -366,13 +436,23 @@ app.post('/api/transaksi', async (req, res) => {
             safePayment
         ]);
 
+        // PostgreSQL mengembalikan ID melalui RETURNING
+        const transaksiId = txResult[0].id;
+
+        // Simpan detail transaksi
         for (const item of items) {
             await connection.execute(`
                 INSERT INTO detail_transaksi
-                (transaksi_id, menu_id, jumlah, harga, subtotal)
+                (
+                    transaksi_id,
+                    menu_id,
+                    jumlah,
+                    harga,
+                    subtotal
+                )
                 VALUES (?, ?, ?, ?, ?)
             `, [
-                txResult.insertId,
+                transaksiId,
                 item.menu_id,
                 Number(item.jumlah) || 1,
                 Number(item.harga) || 0,
@@ -382,21 +462,36 @@ app.post('/api/transaksi', async (req, res) => {
 
         await connection.commit();
 
-        const [userRows] = await db.execute('SELECT nama FROM pengguna WHERE id = ?', [pengguna_id]);
+        const [userRows] = await db.execute(
+            'SELECT nama FROM pengguna WHERE id = ?',
+            [pengguna_id]
+        );
+
         const cashier = userRows[0]?.nama || 'Kasir Kafe';
 
         const saved = {
             orderNumber,
             timestamp: new Date(),
             cashier,
-            orderType: safeOrderType === 'take_away' ? 'Take Away' : 'Dine In',
+
+            orderType:
+                safeOrderType === 'take_away'
+                    ? 'Take Away'
+                    : 'Dine In',
+
             tableNumber: nomor_meja || '-',
-            paymentMethod: safePayment === 'qris' ? 'QRIS' : 'Tunai',
+
+            paymentMethod:
+                safePayment === 'qris'
+                    ? 'QRIS'
+                    : 'Tunai',
+
             subtotal: Number(subtotal) || 0,
             tax: Number(pajak) || 0,
             grandTotal: Number(total) || 0,
             paidAmount: Number(dibayar) || 0,
             changeAmount: Number(kembalian) || 0,
+
             items: items.map(item => ({
                 menu_id: item.menu_id,
                 name: item.name || `Menu #${item.menu_id}`,
@@ -406,13 +501,31 @@ app.post('/api/transaksi', async (req, res) => {
             }))
         };
 
-        res.json({ berhasil: true, pesan: 'Transaksi berhasil disimpan.', data: saved });
+        res.json({
+            berhasil: true,
+            pesan: 'Transaksi berhasil disimpan.',
+            data: saved
+        });
+
     } catch (err) {
         await connection.rollback();
-        if (err.code === 'ER_DUP_ENTRY') {
-            return sendError(res, 409, 'Nomor transaksi sudah digunakan. Silakan coba lagi.');
+
+        // PostgreSQL duplicate key
+        if (err.code === '23505') {
+            return sendError(
+                res,
+                409,
+                'Nomor transaksi sudah digunakan. Silakan coba lagi.'
+            );
         }
-        sendError(res, 500, 'Gagal menyimpan transaksi.', err);
+
+        sendError(
+            res,
+            500,
+            'Gagal menyimpan transaksi.',
+            err
+        );
+
     } finally {
         connection.release();
     }
