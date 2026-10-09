@@ -18,10 +18,10 @@ app.use(session({
 }));
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 function sendError(res, status, message, error = null) {
@@ -125,16 +125,30 @@ app.post('/api/menu',requireManager, async (req, res) => {
         return sendError(res, 400, 'Nama, kategori, dan harga wajib diisi.');
     }
 
-    try {
-        const [result] = await db.execute(`
-            INSERT INTO menu (kategori_id, nama, harga, deskripsi, tersedia)
-            VALUES (?, ?, ?, ?, ?)
-        `, [kategori_id, nama, Number(harga), deskripsi || '', tersedia !== undefined ? Boolean(tersedia) : true]);
 
-        res.json({ berhasil: true, pesan: 'Menu berhasil ditambahkan.', id: result.insertId });
-    } catch (err) {
-        sendError(res, 500, 'Gagal menambahkan menu.', err);
-    }
+try {
+    const [rows] = await db.execute(`
+        INSERT INTO menu
+            (kategori_id, nama, harga, deskripsi, tersedia)
+        VALUES (?, ?, ?, ?, ?)
+        RETURNING id
+    `, [
+        kategori_id,
+        nama,
+        Number(harga),
+        deskripsi || '',
+        tersedia !== undefined ? Boolean(tersedia) : true
+    ]);
+
+    res.json({
+        berhasil: true,
+        pesan: 'Menu berhasil ditambahkan.',
+        id: rows[0].id
+    });
+} catch (err) {
+    sendError(res, 500, 'Gagal menambahkan menu.', err);
+}
+
 });
 
 app.put('/api/menu/:id', requireManager, async (req, res) => {
@@ -145,17 +159,28 @@ app.put('/api/menu/:id', requireManager, async (req, res) => {
     }
 
     try {
-        const [result] = await db.execute(`
+        const [rows] = await db.execute(`
             UPDATE menu
             SET kategori_id = ?, nama = ?, harga = ?, deskripsi = ?, tersedia = ?
             WHERE id = ?
-        `, [kategori_id, nama, Number(harga), deskripsi || '', Boolean(tersedia), req.params.id]);
+            RETURNING id
+        `, [
+            kategori_id,
+            nama,
+            Number(harga),
+            deskripsi || '',
+            Boolean(tersedia),
+            req.params.id
+        ]);
 
-        if (result.affectedRows === 0) {
+        if (rows.length === 0) {
             return sendError(res, 404, 'Menu tidak ditemukan.');
         }
 
-        res.json({ berhasil: true, pesan: 'Menu berhasil diubah.' });
+        res.json({
+            berhasil: true,
+            pesan: 'Menu berhasil diubah.'
+        });
     } catch (err) {
         sendError(res, 500, 'Gagal mengubah menu.', err);
     }
@@ -547,7 +572,10 @@ app.delete('/api/transaksi', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server Kafe Green berjalan di http://localhost:${PORT}`);
-    console.log('✅ Backend siap menggunakan Node.js + Express + MySQL');
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server Kafe Green berjalan di port ${PORT}`);
+    });
+}
+
+module.exports = app;
