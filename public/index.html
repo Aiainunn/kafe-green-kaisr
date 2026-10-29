@@ -17,31 +17,32 @@
   <div id="loginSection" class="auth-wrapper">
     <div class="auth-card">
       <div class="auth-brand">
-        <div class="brand-logo-badge">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="brand-logo-badge" id="loginLogoBadge">
+          <svg id="loginLogoSvg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 8h1a4 4 0 1 1 0 8h-1"></path>
             <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path>
             <line x1="6" y1="2" x2="6" y2="4"></line>
             <line x1="10" y1="2" x2="10" y2="4"></line>
             <line x1="14" y1="2" x2="14" y2="4"></line>
           </svg>
+          <img id="loginLogoImg" src="" alt="Logo Kafe" style="width:56px;height:56px;object-fit:contain;border-radius:12px;display:none;">
         </div>
-        <h1>Kafe Green</h1>
+        <h1 id="loginBrandName">Kafe Green</h1>
         <p class="brand-subtitle">Point of Sale & Management System</p>
       </div>
 
-      <form id="loginForm" class="auth-form" onsubmit="event.preventDefault(); handleLogin();">
+      <form id="loginForm" class="auth-form" onsubmit="event.preventDefault(); handleLogin();" autocomplete="off">
         <div class="form-group">
           <label for="usernameInput">Username</label>
           <div class="input-with-icon">
-            <input type="text" id="usernameInput" placeholder="Masukkan username" value="kasir" required autocomplete="username">
+            <input type="text" id="usernameInput" placeholder="Masukkan username" required autocomplete="off">
           </div>
         </div>
 
         <div class="form-group">
           <label for="passwordInput">Password</label>
           <div class="input-with-icon">
-            <input type="password" id="passwordInput" placeholder="Masukkan password" value="kasir_kafe123" required autocomplete="current-password">
+            <input type="password" id="passwordInput" placeholder="Masukkan password" required autocomplete="new-password">
             <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility()" title="Lihat password">
               <svg id="pwEyeIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -73,18 +74,19 @@
     <aside class="app-sidebar" id="appSidebar">
       <div class="sidebar-header">
         <div class="brand-inline">
-          <div class="brand-mini-badge">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <div class="brand-mini-badge" id="sidebarLogoBadge">
+            <svg id="sidebarLogoSvg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 8h1a4 4 0 1 1 0 8h-1"></path>
               <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"></path>
               <line x1="6" y1="2" x2="6" y2="4"></line>
               <line x1="10" y1="2" x2="10" y2="4"></line>
               <line x1="14" y1="2" x2="14" y2="4"></line>
             </svg>
+            <img id="sidebarLogoImg" src="" alt="Logo" style="width:32px;height:32px;object-fit:contain;border-radius:6px;display:none;">
           </div>
           <div>
-            <h2 class="sidebar-title">Kafe Green</h2>
-            <span class="sidebar-tagline">POS v2.6 Pro</span>
+            <h2 class="sidebar-title" id="sidebarCafeName">Kafe Green</h2>
+            <span class="sidebar-tagline" id="sidebarCafeAddress">POS System</span>
           </div>
         </div>
       </div>
@@ -110,7 +112,7 @@
           <span class="badge-counter" id="cartPillCount" style="display: none;">0</span>
         </button>
 
-        <button class="nav-item" data-view="menuList" onclick="switchView('menuList')">
+        <button class="nav-item" id="navDaftarMenu" data-view="menuList" onclick="switchView('menuList')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
@@ -183,6 +185,9 @@
               <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
           </button>
+          <div class="header-logo-badge" id="headerLogoBadge" style="display:none; align-items:center; margin-right:8px;">
+            <img id="headerLogoImg" src="" alt="Logo" style="width:36px;height:36px;object-fit:contain;border-radius:8px;">
+          </div>
           <div>
             <h1 class="page-title" id="pageTitle">Dashboard Penjualan</h1>
             <p class="page-subtitle" id="pageSubtitle">Ringkasan performa operasional & penjualan hari ini</p>
@@ -560,69 +565,47 @@
         </div>
       </section>
 
-      <!-- VIEW 3: DAFTAR MENU -->
+      <!-- VIEW 3: DAFTAR MENU (KASIR: PERSIS SEPERTI HALAMAN POS, READ-ONLY) -->
       <section id="viewMenuList" class="view-panel">
-        <div class="page-top-actions">
-          <div class="search-filter-cluster">
-            <div class="search-box">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-              <input type="text" id="menuListSearch" placeholder="Cari menu Kafe Green..." oninput="renderMenuListTable()">
-            </div>
-
-            <select id="menuListCatFilter" class="select-filter" onchange="renderMenuListTable()">
-              <option value="all">Semua Kategori</option>
-              <option value="Kopi">Kopi</option>
-              <option value="Non-Kopi">Non-Kopi</option>
-              <option value="Makanan">Makanan</option>
-              <option value="Snack">Snack</option>
-              
-            </select>
-
-            <select id="menuListStockFilter" class="select-filter" onchange="renderMenuListTable()">
-              <option value="all">Semua Ketersediaan</option>
-              <option value="available">Tersedia</option>
-              <option value="unavailable">Habis / Kosong</option>
-            </select>
+        <!-- SEARCH & CATEGORY BAR (PERSIS SEPERTI HALAMAN KASIR/PEMESANAN) -->
+        <div class="pos-controls-card">
+          <div class="pos-search-wrapper">
+            <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="menuListSearchInput" placeholder="Cari nama menu (contoh: Kopi Susu, Matcha, Croffle...)" oninput="renderMenuListTable()">
+            <button class="clear-search-btn" id="menuListClearSearch" onclick="clearMenuListSearch()" title="Reset pencarian" style="display: none;">✕</button>
           </div>
 
-          <button class="btn btn-primary" onclick="switchView('menuManage'); openAddMenuModal();">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span>Tambah Menu Baru</span>
-          </button>
+          <!-- CATEGORY CHIPS (PERSIS SEPERTI POS) -->
+          <div class="category-chips-scroll" id="menuListCategoryChips">
+            <button class="cat-chip active" data-cat="all" onclick="selectMenuListCategory('all')">
+              <span>Semua Menu</span>
+              <span class="chip-count" id="menuListCatCountAll">0</span>
+            </button>
+            <button class="cat-chip" data-cat="Kopi" onclick="selectMenuListCategory('Kopi')">
+              <span>Kopi</span>
+              <span class="chip-count" id="menuListCatCountKopi">0</span>
+            </button>
+            <button class="cat-chip" data-cat="Non-Kopi" onclick="selectMenuListCategory('Non-Kopi')">
+              <span>Non-Kopi</span>
+              <span class="chip-count" id="menuListCatCountNonKopi">0</span>
+            </button>
+            <button class="cat-chip" data-cat="Makanan" onclick="selectMenuListCategory('Makanan')">
+              <span>Makanan</span>
+              <span class="chip-count" id="menuListCatCountMakanan">0</span>
+            </button>
+            <button class="cat-chip" data-cat="Snack" onclick="selectMenuListCategory('Snack')">
+              <span>Snack</span>
+              <span class="chip-count" id="menuListCatCountSnack">0</span>
+            </button>
+          </div>
         </div>
 
-        <div class="card mt-3">
-          <div class="card-header">
-            <div>
-              <h3 class="card-title">Daftar Menu Kafe Green</h3>
-              <p class="card-subtitle">Katalog lengkap produk, harga, dan ketersediaan stok</p>
-            </div>
-            <span class="badge-total" id="menuListTotalBadge">Total: 0 Menu</span>
-          </div>
-
-          <div class="table-responsive">
-            <table class="data-table" id="menuListTable">
-              <thead>
-                <tr>
-                  <th style="width: 70px;">Foto</th>
-                  <th>Nama Menu</th>
-                  <th>Kategori</th>
-                  <th>Harga Satuan</th>
-                  <th>Ketersediaan Menu</th>
-                  <th style="text-align: right;">Aksi</th>
-                </tr>
-              </thead>
-              <tbody id="menuListTableBody">
-                <!-- Dynamically rendered -->
-              </tbody>
-            </table>
-          </div>
+        <!-- PRODUCT GRID (PERSIS SEPERTI POS) -->
+        <div class="pos-products-grid" id="menuListProductsGrid">
+          <!-- Dynamically populated read-only product cards -->
         </div>
       </section>
 
@@ -631,7 +614,7 @@
         <div class="page-top-actions">
           <div>
             <h2 class="section-heading">Kelola & Modifikasi Menu</h2>
-            <p class="section-desc">Tambah menu baru, perbarui harga, ketersediaan, atau hapus menu.</p>
+            <p class="section-desc">Tambah menu baru, perbarui harga, ketersediaan stok, atau hapus menu.</p>
           </div>
           <button class="btn btn-primary btn-lg" onclick="openAddMenuModal()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -643,7 +626,38 @@
           </button>
         </div>
 
-        <!-- QUICK EDIT GRID -->
+        <!-- SEARCH & FILTER TOOLBAR FOR KELOLA MENU -->
+        <div class="manage-toolbar card mt-3">
+          <div class="manage-toolbar-row">
+            <div class="search-box manage-search-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="manageMenuSearch" placeholder="Cari nama atau deskripsi menu..." oninput="renderManageMenuGrid()">
+            </div>
+
+            <div class="manage-filters-right">
+              <select id="manageMenuCategoryFilter" class="select-filter" onchange="renderManageMenuGrid()">
+                <option value="all">Semua Kategori</option>
+                <option value="Kopi">Kopi</option>
+                <option value="Non-Kopi">Non-Kopi</option>
+                <option value="Makanan">Makanan</option>
+                <option value="Snack">Snack</option>
+              </select>
+
+              <select id="manageMenuStockFilter" class="select-filter" onchange="renderManageMenuGrid()">
+                <option value="all">Semua Ketersediaan</option>
+                <option value="available">Tersedia (Ready)</option>
+                <option value="unavailable">Habis (Sold Out)</option>
+              </select>
+
+              <span class="stat-badge green-badge" id="manageMenuCountBadge">Total: 0 Menu</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- QUICK EDIT GRID (MATCHING POS CARDS) -->
         <div class="manage-cards-grid" id="manageMenuGrid">
           <!-- Populated by JS -->
         </div>
@@ -874,6 +888,46 @@
               <h3 class="card-title">Profil & Informasi Kafe Green</h3>
             </div>
             <form id="cafeSettingsForm" class="settings-form" onsubmit="event.preventDefault(); saveCafeSettings();">
+              <!-- LOGO KAFE UPLOAD -->
+              <div class="form-group">
+                <label>Logo Kafe / Brand</label>
+                <div class="logo-setting-container">
+                  <div class="logo-upload-box" id="logoUploadArea" onclick="document.getElementById('cfgLogoInput').click()">
+                    <img id="cfgLogoPreview" src="" alt="Preview Logo" style="display:none; max-width:140px; max-height:140px; object-fit:contain; border-radius:12px;">
+                    <div id="logoUploadPlaceholder" class="logo-upload-placeholder">
+                      <div class="upload-icon-circle">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                          <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                      </div>
+                      <span class="upload-title">Klik atau tarik logo ke sini</span>
+                      <small class="upload-hint">Format JPG, PNG, WEBP (Maksimal 5MB)</small>
+                    </div>
+                  </div>
+                  <input type="file" id="cfgLogoInput" accept="image/*" style="display:none;" onchange="previewLogoUpload(event)">
+                  <div class="logo-action-buttons" style="margin-top: 10px; display:flex; gap: 8px;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('cfgLogoInput').click()">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                      </svg>
+                      <span>Pilih Foto Logo</span>
+                    </button>
+                    <button type="button" class="btn btn-ghost-danger btn-sm" id="btnRemoveLogo" style="display:none;" onclick="removeCafeLogo()">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      <span>Hapus Logo</span>
+                    </button>
+                  </div>
+                  <small class="form-hint">Logo kafe otomatis digunakan pada <strong>Struk Pembayaran</strong>, <strong>Sidebar Menu</strong>, <strong>Header Atas</strong>, dan <strong>Halaman Login</strong>.</small>
+                </div>
+              </div>
+
               <div class="form-group">
                 <label for="cfgCafeName">Nama Kafe / Usaha</label>
                 <input type="text" id="cfgCafeName" value="Kafe Green" required>
@@ -884,15 +938,22 @@
                 <textarea id="cfgCafeAddress" rows="2" required>Jl. Rimbun Hijau No. 88, Kemang, Jakarta Selatan</textarea>
               </div>
 
+              <div class="form-group">
+                <label for="cfgCafePhone">Nomor Telepon / WhatsApp</label>
+                <input type="text" id="cfgCafePhone" value="0812-3456-7890">
+              </div>
+
+              <!-- PISAHKAN FIELD NAMA WIFI & PASSWORD TERPISAH -->
               <div class="form-row">
                 <div class="form-group">
-                  <label for="cfgCafePhone">Nomor Telepon / WhatsApp</label>
-                  <input type="text" id="cfgCafePhone" value="0812-3456-7890">
+                  <label for="cfgWifiName">Nama Wi-Fi (SSID)</label>
+                  <input type="text" id="cfgWifiName" placeholder="Contoh: KafeGreen-Guest">
+                  <small class="form-hint">Nama SSID Wi-Fi yang tampil di struk</small>
                 </div>
                 <div class="form-group">
-                  <label for="cfgCafeWifi">Info Wi-Fi Kafe</label>
-                  <input type="text" id="cfgCafeWifi" value="KafeGreen-Guest / kopienak88" placeholder="Nama Wi-Fi / Password">
-                  <small class="form-hint">Format: <strong>Nama Wi-Fi / Password</strong>. Contoh: KafeGreen-Guest / kopienak88</small>
+                  <label for="cfgWifiPassword">Password Wi-Fi</label>
+                  <input type="text" id="cfgWifiPassword" placeholder="Contoh: kopienak88">
+                  <small class="form-hint">Kata sandi Wi-Fi untuk pelanggan di struk</small>
                 </div>
               </div>
 
@@ -900,7 +961,7 @@
                 <div class="form-group">
                   <label for="cfgTaxRate">Tarif PPN / Pajak (%)</label>
                   <input type="number" id="cfgTaxRate" min="0" max="25" step="1" value="10">
-                  <small class="form-hint">Isi 0 jika harga menu sudah termasuk pajak (nett).</small>
+                  <small class="form-hint">Nilai PPN yang sebenarnya. Isi 0 jika harga menu sudah nett (bebas pajak). Pajak ini akan tercantum akurat di struk.</small>
                 </div>
                 <div class="form-group">
                   <label for="cfgCurrency">Simbol Mata Uang</label>
@@ -977,7 +1038,10 @@
             <div class="receipt-decor-zig-top"></div>
 
             <div class="receipt-header">
-              <div class="receipt-brand-logo">☕</div>
+              <div class="receipt-brand-logo" id="recLogoBadge">
+                <span id="recLogoEmoji">☕</span>
+                <img id="recLogoImg" src="" alt="Logo Kafe" style="max-width: 64px; max-height: 64px; object-fit: contain; border-radius: 8px; display: none;">
+              </div>
               <h2 class="receipt-store-name" id="recStoreName">KAFE GREEN</h2>
               <p class="receipt-address" id="recStoreAddress">Jl. Rimbun Hijau No. 88, Kemang, Jakarta</p>
               <p class="receipt-contact" id="recStoreContact">Telp: 0812-3456-7890</p>
@@ -1020,7 +1084,7 @@
                 <span id="recSubtotal">Rp 0</span>
               </div>
               <div class="receipt-sum-row" id="recTaxRow">
-                <span>PPN (10%):</span>
+                <span id="recTaxLabel">PPN (10%):</span>
                 <span id="recTax">Rp 0</span>
               </div>
               <div class="receipt-sum-row bold-row">
@@ -1051,7 +1115,12 @@
                 <span class="barcode-num" id="recBarcodeId">*KG-20261006-0001*</span>
               </div>
               <p class="receipt-thankyou" id="recFooterMessage">Terima kasih atas kunjungan Anda!</p>
-              <p class="receipt-wifi" id="recWifiInfo">Wi-Fi: -</p>
+              
+              <!-- INFO WIFI PELANGGAN (FONT SAMA DENGAN CATATAN KAKI STRUK) -->
+              <div class="receipt-wifi-info" id="recWifiBox">
+                <p class="receipt-wifi-line" id="recWifiNameLine">Wi-Fi: <span id="recWifiName">-</span></p>
+                <p class="receipt-wifi-line" id="recWifiPassLine">Password: <span id="recWifiPass">-</span></p>
+              </div>
             </div>
 
             <div class="receipt-decor-zig-bottom"></div>
@@ -1098,6 +1167,44 @@
           <input type="text" id="menuFormName" placeholder="Contoh: Kopi Susu Pandan" required>
         </div>
 
+        <!-- UPLOAD FOTO PRODUK ASLI -->
+        <div class="form-group">
+          <label>Foto Produk Asli Kafe</label>
+          <div class="image-upload-wrapper">
+            <div class="image-preview-box" id="menuImagePreviewBox">
+              <img id="menuImagePreview" src="" alt="Preview Foto Menu" class="menu-preview-img hidden">
+              <div id="menuImagePlaceholder" class="image-preview-placeholder">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                  <circle cx="9" cy="9" r="2"/>
+                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+                </svg>
+                <span>Belum ada foto</span>
+              </div>
+            </div>
+            <div class="image-upload-controls">
+              <input type="file" id="menuPhotoFileInput" accept="image/*" class="hidden" onchange="handleMenuPhotoFileSelect(event)">
+              <div class="image-upload-btn-row">
+                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('menuPhotoFileInput').click()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <span>Pilih Foto dari Perangkat</span>
+                </button>
+                <button type="button" id="btnRemovePhoto" class="btn btn-ghost-danger btn-sm hidden" onclick="removeMenuPhoto()">
+                  Hapus Foto
+                </button>
+              </div>
+              <div class="url-input-box mt-1">
+                <input type="text" id="menuFormImageUrl" placeholder="Atau masukkan URL foto (opsional)..." oninput="handleImageUrlInput(this.value)">
+              </div>
+              <small class="text-muted" style="font-size: 0.72rem;">Mendukung format JPG, PNG, WEBP (maks. 5MB).</small>
+            </div>
+          </div>
+        </div>
+
         <div class="form-row">
           <div class="form-group">
             <label for="menuFormCategory">Kategori <span class="text-danger">*</span></label>
@@ -1106,7 +1213,6 @@
               <option value="Non-Kopi">Non-Kopi</option>
               <option value="Makanan">Makanan</option>
               <option value="Snack">Snack</option>
-              
             </select>
           </div>
 
@@ -1116,17 +1222,43 @@
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="menuFormDesc">Deskripsi Singkat Menu</label>
-          <input type="text" id="menuFormDesc" placeholder="Contoh: Perpaduan espresso robusta & sirup pandan wangi">
+        <!-- STATUS KETERSEDIAAN MENU (REDESIGNED: MODERN SEGMENTED SELECTOR, NO WHITE PATCHES) -->
+        <div class="form-group availability-form-group">
+          <label class="form-label-bold">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>Status Ketersediaan Stok</span>
+            <span class="text-danger">*</span>
+          </label>
+
+          <input type="checkbox" id="menuFormAvailable" class="hidden" checked>
+
+          <div class="avail-selector-grid">
+            <div class="avail-selector-card is-active-available" id="availOptReady" onclick="setMenuAvailabilityState(true)">
+              <div class="avail-card-header">
+                <span class="avail-dot dot-ready"></span>
+                <span class="avail-status-name">Tersedia (Ready)</span>
+                <span class="avail-check-icon">✓</span>
+              </div>
+              <p class="avail-card-sub">Menu aktif dan siap dipesan di kasir</p>
+            </div>
+
+            <div class="avail-selector-card" id="availOptOut" onclick="setMenuAvailabilityState(false)">
+              <div class="avail-card-header">
+                <span class="avail-dot dot-out"></span>
+                <span class="avail-status-name">Stok Habis (Sold Out)</span>
+                <span class="avail-check-icon">✕</span>
+              </div>
+              <p class="avail-card-sub">Ditandai habis & dinonaktifkan di kasir</p>
+            </div>
+          </div>
         </div>
 
         <div class="form-group">
-          <label class="toggle-container">
-            <input type="checkbox" id="menuFormAvailable" checked>
-            <span class="toggle-slider"></span>
-            <span class="toggle-label-text">Ketersediaan Menu: <strong>Tersedia (Ready to Order)</strong></span>
-          </label>
+          <label for="menuFormDesc">Deskripsi Singkat Menu</label>
+          <input type="text" id="menuFormDesc" placeholder="Contoh: Perpaduan espresso robusta & sirup pandan wangi">
         </div>
 
         <div class="modal-footer">

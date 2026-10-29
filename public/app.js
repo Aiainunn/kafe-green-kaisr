@@ -12,8 +12,11 @@ const DEFAULT_SETTINGS = {
   address: '',
   phone: '',
   wifiInfo: '',
+  wifiName: '',
+  wifiPassword: '',
   taxRate: 0,
-  footerMessage: 'Terima kasih telah berkunjung ke Kafe Green'
+  footerMessage: 'Terima kasih telah berkunjung ke Kafe Green',
+  logoUrl: ''
 };
 
 // --- APP STATE ---
@@ -26,6 +29,7 @@ const State = {
   settings: { ...DEFAULT_SETTINGS },
   soundEnabled: true,
   currentCategory: 'all',
+  menuListCategory: 'all',
   posSearchQuery: '',
   selectedPaymentMethod: 'Tunai',
   orderType: 'Dine In',
@@ -130,6 +134,43 @@ async function apiRequest(url, options = {}) {
   return result;
 }
 
+async function apiUpload(formData) {
+  const response = await fetch(`${API_BASE}/upload`, {
+    method: 'POST',
+    body: formData
+  });
+
+  let result = {};
+  try { result = await response.json(); } catch (_) {}
+
+  if (!response.ok || result.berhasil === false) {
+    throw new Error(result.pesan || `Upload gagal (${response.status})`);
+  }
+
+  return result;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getCategoryEmoji(category) {
+  const key = category === 'Camilan' ? 'Snack' : category;
+  const emojis = {
+    'Kopi': '☕',
+    'Non-Kopi': '🧃',
+    'Makanan': '🍛',
+    'Snack': '🍟'
+  };
+  return emojis[key] || '🍽️';
+}
+
 function normalizeTransaction(tx) {
   return {
     ...tx,
@@ -177,7 +218,8 @@ async function loadMenuFromMySQL() {
     category: item.kategori === 'Camilan' ? 'Snack' : item.kategori,
     price: Number(item.harga),
     desc: item.deskripsi || '',
-    available: Boolean(item.tersedia)
+    available: Boolean(item.tersedia),
+    image: item.gambar || ''
   }));
 
   console.log('=== MENU DARI DATABASE ===');
@@ -190,13 +232,29 @@ async function loadMenuFromMySQL() {
 async function loadSettingsFromMySQL() {
   const result = await apiRequest('/pengaturan');
   const item = result.data || {};
+
+  let wifiName = item.wifi_nama || '';
+  let wifiPassword = item.wifi_password || '';
+  if (!wifiName && item.wifi_info) {
+    if (item.wifi_info.includes('/')) {
+      const parts = item.wifi_info.split('/').map(s => s.trim());
+      wifiName = parts[0] || '';
+      wifiPassword = parts.slice(1).join(' / ') || '';
+    } else {
+      wifiName = item.wifi_info;
+    }
+  }
+
   State.settings = {
     cafeName: item.nama_kafe || DEFAULT_SETTINGS.cafeName,
     address: item.alamat || '',
     phone: item.telepon || '',
     wifiInfo: item.wifi_info || '',
+    wifiName: wifiName,
+    wifiPassword: wifiPassword,
     taxRate: Number(item.pajak) || 0,
-    footerMessage: item.footer_struk || DEFAULT_SETTINGS.footerMessage
+    footerMessage: item.footer_struk || DEFAULT_SETTINGS.footerMessage,
+    logoUrl: item.logo_url || ''
   };
   applySettingsToUI();
 }
@@ -260,6 +318,11 @@ async function handleLogin() {
 
     errorEl.classList.add('hidden');
 
+    const uInput = document.getElementById('usernameInput');
+    const pInput = document.getElementById('passwordInput');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
+
     initLoggedInState();
 
     showToast(
@@ -307,6 +370,12 @@ function handleLogout() {
   if (confirm('Apakah Anda yakin ingin keluar (logout)?')) {
     State.currentUser = null;
     localStorage.removeItem('kg_auth_user');
+    const uInput = document.getElementById('usernameInput');
+    const pInput = document.getElementById('passwordInput');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
+    const errorEl = document.getElementById('loginError');
+    if (errorEl) errorEl.classList.add('hidden');
     document.getElementById('loginSection').classList.remove('hidden');
     document.getElementById('appContainer').classList.add('hidden');
     showToast('Berhasil keluar dari sistem.', 'info');
@@ -339,14 +408,11 @@ function initLoggedInState() {
 }
 
 function applyRolePermissions() {
-
   const role = State.currentUser?.roleCode;
 
-  // Ambil menu navigasi berdasarkan teks/onclick
   const navItems = document.querySelectorAll('[onclick*="switchView"]');
 
   navItems.forEach(item => {
-
     const action = item.getAttribute('onclick') || '';
 
     // Fitur yang hanya boleh diakses Manager
@@ -355,13 +421,21 @@ function applyRolePermissions() {
       action.includes("switchView('reports')") ||
       action.includes("switchView('settings')");
 
+    // Daftar Menu: hanya untuk kasir (manager sudah ada Kelola Menu)
+    const kasirOnly = action.includes("switchView('menuList')");
+
     if (role === 'kasir' && managerOnly) {
+      item.classList.add('hidden');
+    } else if (role === 'manager' && kasirOnly) {
       item.classList.add('hidden');
     } else {
       item.classList.remove('hidden');
     }
-
   });
+
+  // Tampilkan tombol Tambah hanya untuk manager
+  const btnTambah = document.getElementById('btnMenuListTambah');
+  if (btnTambah) btnTambah.style.display = role === 'manager' ? '' : 'none';
 }
 
 // --- UTILS ---
@@ -635,11 +709,19 @@ function updateCategoryChipCounts() {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
   };
+  // POS chip counts
   setCount('catCountAll', counts.all);
   setCount('catCountKopi', counts.Kopi);
   setCount('catCountNonKopi', counts['Non-Kopi']);
   setCount('catCountMakanan', counts.Makanan);
   setCount('catCountSnack', counts.Snack);
+
+  // Daftar Menu chip counts
+  setCount('menuListCatCountAll', counts.all);
+  setCount('menuListCatCountKopi', counts.Kopi);
+  setCount('menuListCatCountNonKopi', counts['Non-Kopi']);
+  setCount('menuListCatCountMakanan', counts.Makanan);
+  setCount('menuListCatCountSnack', counts.Snack);
 }
 
 function selectPosCategory(cat) {
@@ -648,6 +730,26 @@ function selectPosCategory(cat) {
     chip.classList.toggle('active', chip.dataset.cat === cat);
   });
   filterPosMenu();
+}
+
+function selectMenuListCategory(cat) {
+  State.menuListCategory = cat;
+  document.querySelectorAll('#menuListCategoryChips .cat-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.cat === cat);
+  });
+  renderMenuListTable();
+}
+
+function clearMenuListSearch(resetCat = false) {
+  const searchInput = document.getElementById('menuListSearchInput');
+  if (searchInput) searchInput.value = '';
+  if (resetCat) {
+    State.menuListCategory = 'all';
+    document.querySelectorAll('#menuListCategoryChips .cat-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.cat === 'all');
+    });
+  }
+  renderMenuListTable();
 }
 
 function getCategoryVisual(category) {
@@ -681,11 +783,19 @@ function filterPosMenu() {
 
   container.innerHTML = filtered.map(item => `
     <div class="product-card ${!item.available ? 'unavailable' : ''}" onclick="onProductClick('${item.id}')">
-      <div class="product-image-box category-visual-box">
-        <div class="category-visual-content">
-          ${getCategoryVisual(item.category)}
-          <span>${item.category}</span>
-        </div>
+      <div class="product-image-box ${item.image ? 'has-real-photo' : 'category-visual-box'}">
+        ${item.image ? `
+          <img src="${item.image}" alt="${escapeHtml(item.name)}" class="product-real-img" onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+          <div class="category-visual-content hidden">
+            ${getCategoryVisual(item.category)}
+            <span>${item.category}</span>
+          </div>
+        ` : `
+          <div class="category-visual-content">
+            ${getCategoryVisual(item.category)}
+            <span>${item.category}</span>
+          </div>
+        `}
         <span class="product-badge-stock ${item.available ? 'badge-green' : 'badge-amber'}">
           ${item.available ? 'Tersedia' : 'Habis'}
         </span>
@@ -909,29 +1019,50 @@ async function processOrder() {
 // ============================================================
 function openReceiptModal(order) {
   document.getElementById('receiptModal').classList.remove('hidden');
-  document.getElementById('recStoreName').textContent = State.settings.cafeName.toUpperCase();
-  document.getElementById('recStoreAddress').textContent = State.settings.address;
-  document.getElementById('recStoreContact').textContent = `Telp: ${State.settings.phone}`;
-  document.getElementById('recFooterMessage').textContent = State.settings.footerMessage;
 
-  // Info Wi-Fi disimpan dalam satu kolom, misalnya:
-  // "KafeGreen-Guest / kopienak88" atau "WiFi: KafeGreen-Guest | Password: kopienak88".
-  // Tampilkan dengan format yang lebih jelas di struk.
-  const wifiRaw = String(State.settings.wifiInfo || '').trim();
-  let wifiText = wifiRaw || '-';
-  if (wifiRaw.includes('/')) {
-    const parts = wifiRaw.split('/').map(v => v.trim()).filter(Boolean);
-    if (parts.length >= 2) {
-      wifiText = `Wi-Fi: ${parts[0]} | Password: ${parts.slice(1).join(' / ')}`;
+  // Logo Kafe pada struk
+  const recLogoImg = document.getElementById('recLogoImg');
+  const recLogoEmoji = document.getElementById('recLogoEmoji');
+  if (recLogoImg && recLogoEmoji) {
+    if (State.settings.logoUrl) {
+      recLogoImg.src = State.settings.logoUrl;
+      recLogoImg.style.display = 'inline-block';
+      recLogoEmoji.style.display = 'none';
+    } else {
+      recLogoImg.style.display = 'none';
+      recLogoEmoji.style.display = 'inline-block';
     }
-  } else if (/password/i.test(wifiRaw)) {
-    wifiText = wifiRaw;
-  } else if (/^wifi\s*:/i.test(wifiRaw)) {
-    wifiText = wifiRaw;
-  } else if (wifiRaw) {
-    wifiText = `Wi-Fi: ${wifiRaw}`;
   }
-  document.getElementById('recWifiInfo').textContent = wifiText;
+
+  document.getElementById('recStoreName').textContent = State.settings.cafeName.toUpperCase();
+  document.getElementById('recStoreAddress').textContent = State.settings.address || '';
+  document.getElementById('recStoreContact').textContent = State.settings.phone ? `Telp: ${State.settings.phone}` : '';
+  document.getElementById('recFooterMessage').textContent = State.settings.footerMessage || '';
+
+  // Wi-Fi & Password di struk (font dan format sama dengan catatan kaki struk)
+  const wifiBox = document.getElementById('recWifiBox');
+  const wifiNameEl = document.getElementById('recWifiName');
+  const wifiPassEl = document.getElementById('recWifiPass');
+  const wifiNameLine = document.getElementById('recWifiNameLine');
+  const wifiPassLine = document.getElementById('recWifiPassLine');
+  const wifiName = (State.settings.wifiName || '').trim();
+  const wifiPass = (State.settings.wifiPassword || '').trim();
+
+  if (wifiName || wifiPass) {
+    if (wifiBox) wifiBox.style.display = 'block';
+    if (wifiNameEl) wifiNameEl.textContent = wifiName || '-';
+    if (wifiPassEl) wifiPassEl.textContent = wifiPass || '-';
+    if (wifiNameLine) wifiNameLine.style.display = wifiName ? 'block' : 'none';
+    if (wifiPassLine) wifiPassLine.style.display = wifiPass ? 'block' : 'none';
+  } else if (State.settings.wifiInfo) {
+    if (wifiBox) wifiBox.style.display = 'block';
+    if (wifiNameEl) wifiNameEl.textContent = State.settings.wifiInfo;
+    if (wifiPassEl) wifiPassEl.textContent = '-';
+    if (wifiNameLine) wifiNameLine.style.display = 'block';
+    if (wifiPassLine) wifiPassLine.style.display = 'none';
+  } else {
+    if (wifiBox) wifiBox.style.display = 'none';
+  }
 
   document.getElementById('recOrderNumber').textContent = `#${order.orderNumber}`;
   document.getElementById('recBarcodeId').textContent = `*${order.orderNumber}*`;
@@ -950,8 +1081,15 @@ function openReceiptModal(order) {
 
   document.getElementById('recSubtotal').textContent = formatRupiah(order.subtotal);
   const taxRow = document.getElementById('recTaxRow');
-  if (order.tax > 0) { taxRow.style.display = 'flex'; document.getElementById('recTax').textContent = formatRupiah(order.tax); }
-  else taxRow.style.display = 'none';
+  const taxLabel = document.getElementById('recTaxLabel');
+  if (order.tax > 0) {
+    taxRow.style.display = 'flex';
+    const effectiveRate = order.subtotal > 0 ? Math.round((order.tax / order.subtotal) * 100) : (State.settings.taxRate || 0);
+    if (taxLabel) taxLabel.textContent = `PPN (${effectiveRate}%):`;
+    document.getElementById('recTax').textContent = formatRupiah(order.tax);
+  } else {
+    taxRow.style.display = 'none';
+  }
 
   document.getElementById('recGrandTotal').textContent = formatRupiah(order.grandTotal);
   document.getElementById('recPaymentMethod').textContent = order.paymentMethod;
@@ -988,10 +1126,15 @@ window.addEventListener('afterprint', () => {
 function copyReceiptText() {
   const o = State.lastCompletedOrder;
   if (!o) return;
+  const taxRate = o.subtotal > 0 ? Math.round((o.tax / o.subtotal) * 100) : (State.settings.taxRate || 0);
+  const wifiStr = (State.settings.wifiName || State.settings.wifiPassword)
+    ? `\nWi-Fi: ${State.settings.wifiName || '-'} | Password: ${State.settings.wifiPassword || '-'}`
+    : (State.settings.wifiInfo ? `\nWi-Fi: ${State.settings.wifiInfo}` : '');
+
   const text = `
 === ${State.settings.cafeName.toUpperCase()} ===
 ${State.settings.address}
-No: #${o.orderNumber}
+${State.settings.phone ? 'Telp: ' + State.settings.phone + '\n' : ''}No: #${o.orderNumber}
 Tgl: ${formatDateIndo(o.timestamp)}
 Kasir: ${o.cashier}
 Tipe: ${o.orderType} (${o.tableNumber})
@@ -999,10 +1142,12 @@ Tipe: ${o.orderType} (${o.tableNumber})
 ${o.items.map(i => `${i.name}\n${i.qty} x ${formatRupiah(i.price)} = ${formatRupiah(i.subtotal)}`).join('\n')}
 --------------------------------
 Subtotal: ${formatRupiah(o.subtotal)}
-PPN: ${formatRupiah(o.tax)}
-TOTAL: ${formatRupiah(o.grandTotal)}
+${o.tax > 0 ? `PPN (${taxRate}%): ${formatRupiah(o.tax)}\n` : ''}TOTAL: ${formatRupiah(o.grandTotal)}
+Metode: ${o.paymentMethod}
+Bayar: ${formatRupiah(o.paidAmount)}
+Kembali: ${formatRupiah(o.changeAmount)}
 ================================
-${State.settings.footerMessage}`.trim();
+${State.settings.footerMessage}${wifiStr}`.trim();
   navigator.clipboard.writeText(text).then(() => showToast('Teks struk disalin!', 'success'));
 }
 
@@ -1010,83 +1155,288 @@ ${State.settings.footerMessage}`.trim();
 // MENU LIST & KELOLA MENU (MYSQL CRUD)
 // ============================================================
 function renderMenuListTable() {
-  const query = document.getElementById('menuListSearch').value.toLowerCase().trim();
-  const catFilter = document.getElementById('menuListCatFilter').value;
-  const stockFilter = document.getElementById('menuListStockFilter').value;
+  updateCategoryChipCounts();
 
-  let list = State.menu;
-  if (catFilter !== 'all') list = list.filter(m => m.category === catFilter);
-  if (stockFilter === 'available') list = list.filter(m => m.available);
-  else if (stockFilter === 'unavailable') list = list.filter(m => !m.available);
-  if (query) list = list.filter(m => m.name.toLowerCase().includes(query));
+  const searchInput = document.getElementById('menuListSearchInput');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const clearBtn = document.getElementById('menuListClearSearch');
+  if (clearBtn) clearBtn.style.display = query ? 'flex' : 'none';
 
-  document.getElementById('menuListTotalBadge').textContent = `Total: ${list.length} Menu`;
-  const tbody = document.getElementById('menuListTableBody');
-  
-  if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 30px;">Tidak ada menu.</td></tr>`; return;
+  const catFilter = State.menuListCategory || 'all';
+
+  let filtered = State.menu || [];
+  if (catFilter !== 'all') {
+    filtered = filtered.filter(m => m.category === catFilter);
+  }
+  if (query) {
+    filtered = filtered.filter(m => 
+      m.name.toLowerCase().includes(query) || 
+      (m.desc && m.desc.toLowerCase().includes(query))
+    );
   }
 
-  tbody.innerHTML = list.map(item => `
-    <tr>
-      <td style="text-align: center;">-</td>
-      <td><strong>${item.name}</strong>${item.desc ? `<div style="font-size: 0.78rem; color: var(--text-muted);">${item.desc}</div>` : ''}</td>
-      <td><span class="badge-tag badge-blue">${item.category}</span></td>
-      <td class="td-price">${formatRupiah(item.price)}</td>
-      <td><button class="btn btn-xs ${item.available ? 'btn-emerald' : 'btn-secondary'}" onclick="toggleMenuAvailability('${item.id}')">${item.available ? '● Tersedia' : '○ Habis'}</button></td>
-      <td style="text-align: right;">
-        <button class="btn btn-ghost btn-sm" onclick="switchView('menuManage'); openEditMenuModal('${item.id}')">Edit</button>
-        <button class="btn btn-ghost-danger btn-sm" onclick="deleteMenuPrompt('${item.id}')">Hapus</button>
-      </td>
-    </tr>`).join('');
+  const container = document.getElementById('menuListProductsGrid');
+  if (!container) return;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 60px 20px; background: white; border-radius: var(--radius-lg); border: 1.5px dashed var(--kg-border);">
+        <div style="font-size: 2.8rem; margin-bottom: 12px;">☕</div>
+        <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;">Menu Tidak Ditemukan</h4>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px;">Coba ubah kata kunci atau pilih kategori menu lain.</p>
+        <button class="btn btn-outline btn-sm" onclick="clearMenuListSearch(true)">Reset Pencarian</button>
+      </div>`;
+    return;
+  }
+
+  // Urutkan berdasarkan nama seperti tampilan kasir / pemesanan
+  filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+  container.innerHTML = filtered.map(item => `
+    <div class="product-card product-card-readonly ${!item.available ? 'unavailable' : ''}">
+      <div class="product-image-box ${item.image ? 'has-real-photo' : 'category-visual-box'}">
+        ${item.image ? `
+          <img src="${item.image}" alt="${escapeHtml(item.name)}" class="product-real-img" onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+          <div class="category-visual-content hidden">
+            ${getCategoryVisual(item.category)}
+            <span>${item.category}</span>
+          </div>
+        ` : `
+          <div class="category-visual-content">
+            ${getCategoryVisual(item.category)}
+            <span>${item.category}</span>
+          </div>
+        `}
+        <span class="product-badge-stock ${item.available ? 'badge-green' : 'badge-amber'}">
+          ${item.available ? 'Tersedia' : 'Habis'}
+        </span>
+      </div>
+      <div class="product-info">
+        <h4 class="product-name">${escapeHtml(item.name)}</h4>
+        <span class="product-category-sub">${item.category}</span>
+      </div>
+      <div class="product-footer-row">
+        <span class="product-price">${formatRupiah(item.price)}</span>
+        <span class="badge-status-pill ${item.available ? 'pill-ready' : 'pill-out'}">${item.available ? '● Tersedia' : '○ Habis'}</span>
+      </div>
+    </div>`).join('');
 }
 
 function renderManageMenuGrid() {
-  document.getElementById('manageMenuGrid').innerHTML = State.menu.map(item => `
-    <div class="manage-menu-card">
-      <div>
-        <div class="manage-card-top">
-            <div class="manage-emoji-box menu-category-visual">
-              ${getCategoryVisual(item.category)}
-            </div>
-          <div>
-            <h4 class="manage-card-title">${item.name}</h4>
-            <span class="manage-card-category">${item.category}</span>
-            <div class="manage-card-price">${formatRupiah(item.price)}</div>
+  const searchInput = document.getElementById('manageMenuSearch');
+  const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const catFilter = document.getElementById('manageMenuCategoryFilter') ? document.getElementById('manageMenuCategoryFilter').value : 'all';
+  const stockFilter = document.getElementById('manageMenuStockFilter') ? document.getElementById('manageMenuStockFilter').value : 'all';
+
+  let filtered = State.menu || [];
+  if (catFilter !== 'all') filtered = filtered.filter(m => m.category === catFilter);
+  if (stockFilter === 'available') filtered = filtered.filter(m => m.available);
+  else if (stockFilter === 'unavailable') filtered = filtered.filter(m => !m.available);
+  if (query) filtered = filtered.filter(m => m.name.toLowerCase().includes(query) || (m.desc && m.desc.toLowerCase().includes(query)));
+
+  const countBadge = document.getElementById('manageMenuCountBadge');
+  if (countBadge) countBadge.textContent = `Total: ${filtered.length} Menu`;
+
+  const container = document.getElementById('manageMenuGrid');
+  if (!container) return;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="manage-empty-state" style="grid-column: 1/-1; text-align: center; padding: 50px 20px; background: white; border-radius: var(--radius-lg); border: 1.5px dashed var(--kg-border);">
+        <div style="font-size: 2.5rem; margin-bottom: 10px;">☕</div>
+        <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;">Menu Tidak Ditemukan</h4>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">Tidak ada menu yang sesuai dengan kata kunci pencarian atau filter yang dipilih.</p>
+        <button class="btn btn-outline btn-sm" onclick="clearManageFilters()">Reset Pencarian</button>
+      </div>`;
+    return;
+  }
+
+  // Urutkan berdasarkan nama
+  filtered.sort((a,b) => a.name.localeCompare(b.name));
+
+  container.innerHTML = filtered.map(item => `
+    <div class="product-card manage-product-card ${!item.available ? 'unavailable' : ''}">
+      <div class="product-image-box ${item.image ? 'has-real-photo' : 'category-visual-box'}">
+        ${item.image ? `
+          <img src="${item.image}" alt="${escapeHtml(item.name)}" class="product-real-img" onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.classList.remove('hidden');">
+          <div class="category-visual-content hidden">
+            ${getCategoryVisual(item.category)}
+            <span>${item.category}</span>
           </div>
-        </div>
-        <p class="manage-card-desc">${item.desc || '-'}</p>
+        ` : `
+          <div class="category-visual-content">
+            ${getCategoryVisual(item.category)}
+            <span>${item.category}</span>
+          </div>
+        `}
+        <span class="product-category-tag">${item.category}</span>
+        <button type="button" 
+          class="product-badge-stock manage-badge-btn ${item.available ? 'badge-green' : 'badge-amber'}" 
+          onclick="event.stopPropagation(); toggleMenuAvailability('${item.id}')" 
+          title="Klik untuk ubah ketersediaan: ${item.available ? 'Saat ini Tersedia (Klik untuk ubah ke Habis)' : 'Saat ini Habis (Klik untuk ubah ke Tersedia)'}">
+          <span class="stock-pulse-dot"></span>
+          <span>${item.available ? 'Tersedia' : 'Habis'}</span>
+        </button>
       </div>
-      <div>
-        <div class="manage-card-status-row">
-          <span style="font-size: 0.8rem; font-weight: 600;">Status Stok:</span>
-          <button class="btn btn-xs ${item.available ? 'btn-emerald' : 'btn-secondary'}" onclick="toggleMenuAvailability('${item.id}')">${item.available ? 'Tersedia' : 'Habis'}</button>
-        </div>
-        <div class="manage-card-actions">
-          <button class="btn btn-outline btn-sm" onclick="openEditMenuModal('${item.id}')">Edit Menu</button>
-          <button class="btn btn-ghost-danger btn-sm" onclick="deleteMenuPrompt('${item.id}')">Hapus</button>
+
+      <div class="product-info">
+        <h4 class="product-name" title="${escapeHtml(item.name)}">${item.name}</h4>
+        ${item.desc ? `<p class="manage-card-desc-text" title="${escapeHtml(item.desc)}">${escapeHtml(item.desc)}</p>` : `<p class="manage-card-desc-text empty">Tanpa deskripsi</p>`}
+      </div>
+
+      <div class="product-footer-row manage-card-footer">
+        <span class="product-price">${formatRupiah(item.price)}</span>
+        <div class="manage-action-btns">
+          <button type="button" class="btn-manage-edit" onclick="openEditMenuModal('${item.id}')" title="Edit Menu & Ketersediaan">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span>Edit</span>
+          </button>
+          <button type="button" class="btn-manage-delete" onclick="deleteMenuPrompt('${item.id}')" title="Hapus Menu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
         </div>
       </div>
     </div>`).join('');
+}
+
+function clearManageFilters() {
+  const searchInput = document.getElementById('manageMenuSearch');
+  if (searchInput) searchInput.value = '';
+  const catFilter = document.getElementById('manageMenuCategoryFilter');
+  if (catFilter) catFilter.value = 'all';
+  const stockFilter = document.getElementById('manageMenuStockFilter');
+  if (stockFilter) stockFilter.value = 'all';
+  renderManageMenuGrid();
 }
 
 async function toggleMenuAvailability(id) {
   const item = State.menu.find(m => m.id === id);
   if (!item) return;
 
+  const nextStatus = !item.available;
   try {
     await apiRequest(`/menu/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ tersedia: !item.available })
+      body: JSON.stringify({ tersedia: nextStatus })
     });
-    item.available = !item.available;
+    item.available = nextStatus;
     refreshCurrentView();
-    showToast('Status stok menu berhasil diubah.', 'info');
+    showToast(`Status ${item.name} diubah ke: ${nextStatus ? 'Tersedia' : 'Habis'}.`, 'info');
   } catch (error) {
     showToast(`Gagal mengubah status: ${error.message}`, 'danger');
   }
 }
 
+
+let currentMenuPhotoUrl = '';
+let currentMenuPhotoFile = null;
+
+function resetMenuPhotoInput() {
+  currentMenuPhotoUrl = '';
+  currentMenuPhotoFile = null;
+  const fileInput = document.getElementById('menuPhotoFileInput');
+  if (fileInput) fileInput.value = '';
+  const urlInput = document.getElementById('menuFormImageUrl');
+  if (urlInput) urlInput.value = '';
+  updatePhotoPreview('');
+}
+
+function setMenuPhotoState(url) {
+  currentMenuPhotoUrl = url || '';
+  currentMenuPhotoFile = null;
+  const fileInput = document.getElementById('menuPhotoFileInput');
+  if (fileInput) fileInput.value = '';
+  const urlInput = document.getElementById('menuFormImageUrl');
+  if (urlInput) urlInput.value = url || '';
+  updatePhotoPreview(url || '');
+}
+
+function handleMenuPhotoFileSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    showToast('File yang dipilih harus berupa gambar.', 'danger');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Ukuran gambar maksimal 5MB.', 'danger');
+    event.target.value = '';
+    return;
+  }
+
+  currentMenuPhotoFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    updatePhotoPreview(e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleImageUrlInput(url) {
+  const trimmed = url.trim();
+  currentMenuPhotoUrl = trimmed;
+  currentMenuPhotoFile = null;
+  const fileInput = document.getElementById('menuPhotoFileInput');
+  if (fileInput) fileInput.value = '';
+  updatePhotoPreview(trimmed);
+}
+
+function removeMenuPhoto() {
+  resetMenuPhotoInput();
+  showToast('Foto menu dihapus.', 'info');
+}
+
+function updatePhotoPreview(src) {
+  const previewImg = document.getElementById('menuImagePreview');
+  const placeholder = document.getElementById('menuImagePlaceholder');
+  const btnRemove = document.getElementById('btnRemovePhoto');
+
+  if (src) {
+    if (previewImg) {
+      previewImg.src = src;
+      previewImg.classList.remove('hidden');
+    }
+    if (placeholder) placeholder.classList.add('hidden');
+    if (btnRemove) btnRemove.classList.remove('hidden');
+  } else {
+    if (previewImg) {
+      previewImg.src = '';
+      previewImg.classList.add('hidden');
+    }
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (btnRemove) btnRemove.classList.add('hidden');
+  }
+}
+
+function setMenuAvailabilityState(isAvailable) {
+  const checkbox = document.getElementById('menuFormAvailable');
+  if (checkbox) checkbox.checked = Boolean(isAvailable);
+
+  const optReady = document.getElementById('availOptReady');
+  const optOut = document.getElementById('availOptOut');
+
+  if (optReady && optOut) {
+    if (isAvailable) {
+      optReady.classList.add('is-active-available');
+      optReady.classList.remove('is-inactive');
+      optOut.classList.remove('is-active-out');
+      optOut.classList.add('is-inactive');
+    } else {
+      optReady.classList.remove('is-active-available');
+      optReady.classList.add('is-inactive');
+      optOut.classList.add('is-active-out');
+      optOut.classList.remove('is-inactive');
+    }
+  }
+}
 
 function openAddMenuModal() {
   document.getElementById('menuModalTitle').textContent = 'Tambah Menu Baru';
@@ -1095,10 +1445,10 @@ function openAddMenuModal() {
   document.getElementById('menuFormCategory').value = 'Kopi';
   document.getElementById('menuFormPrice').value = '';
   document.getElementById('menuFormDesc').value = '';
-  document.getElementById('menuFormAvailable').checked = true;
+  setMenuAvailabilityState(true);
+  resetMenuPhotoInput();
   document.getElementById('menuModal').classList.remove('hidden');
 }
-
 
 function openEditMenuModal(id) {
   const item = State.menu.find(m => m.id === id);
@@ -1109,13 +1459,15 @@ function openEditMenuModal(id) {
   document.getElementById('menuFormCategory').value = item.category === 'Camilan' ? 'Snack' : item.category;
   document.getElementById('menuFormPrice').value = item.price;
   document.getElementById('menuFormDesc').value = item.desc || '';
-  document.getElementById('menuFormAvailable').checked = item.available;
+  setMenuAvailabilityState(Boolean(item.available));
+  setMenuPhotoState(item.image || '');
   document.getElementById('menuModal').classList.remove('hidden');
 }
 
-function closeMenuModal() { document.getElementById('menuModal').classList.add('hidden'); }
-
-
+function closeMenuModal() {
+  document.getElementById('menuModal').classList.add('hidden');
+  resetMenuPhotoInput();
+}
 
 async function saveMenuForm() {
   const editId = document.getElementById('menuEditId').value;
@@ -1131,15 +1483,31 @@ async function saveMenuForm() {
     return;
   }
 
-  const payload = {
-    nama: name,
-    kategori_id: kategoriId,
-    harga: price,
-    deskripsi: desc,
-    tersedia: available
-  };
+  const submitBtn = document.getElementById('menuFormSubmitBtnText');
+  const originalBtnText = submitBtn ? submitBtn.textContent : 'Simpan Menu';
+  if (submitBtn) submitBtn.textContent = 'Menyimpan...';
+
+  let imageUrl = currentMenuPhotoUrl;
+  const fileInput = document.getElementById('menuPhotoFileInput');
 
   try {
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      showToast('Mengunggah foto menu...', 'info');
+      const formData = new FormData();
+      formData.append('foto', fileInput.files[0]);
+      const uploadRes = await apiUpload(formData);
+      imageUrl = uploadRes.url;
+    }
+
+    const payload = {
+      nama: name,
+      kategori_id: kategoriId,
+      harga: price,
+      deskripsi: desc,
+      tersedia: available,
+      gambar: imageUrl || ''
+    };
+
     if (editId) {
       await apiRequest(`/menu/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
       showToast('Menu berhasil diubah.', 'success');
@@ -1153,6 +1521,8 @@ async function saveMenuForm() {
     refreshCurrentView();
   } catch (error) {
     showToast(`Gagal menyimpan menu: ${error.message}`, 'danger');
+  } finally {
+    if (submitBtn) submitBtn.textContent = originalBtnText;
   }
 }
 
@@ -1324,41 +1694,183 @@ function exportReportCSV() {
 // SETTINGS
 // ============================================================
 function applySettingsToUI() {
-  document.getElementById('cfgCafeName').value = State.settings.cafeName;
-  document.getElementById('cfgCafeAddress').value = State.settings.address;
-  document.getElementById('cfgCafePhone').value = State.settings.phone;
-  document.getElementById('cfgCafeWifi').value = State.settings.wifiInfo;
-  document.getElementById('cfgTaxRate').value = State.settings.taxRate;
-  document.getElementById('cfgReceiptFooter').value = State.settings.footerMessage;
+  const name = State.settings.cafeName || 'Kafe Green';
+  const address = State.settings.address || '';
+  const logo = State.settings.logoUrl || '';
+
+  // Update sidebar branding
+  const sidebarName = document.getElementById('sidebarCafeName');
+  if (sidebarName) sidebarName.textContent = name;
+  const sidebarAddr = document.getElementById('sidebarCafeAddress');
+  if (sidebarAddr) sidebarAddr.textContent = address || 'POS System';
+
+  // Update sidebar logo
+  const sidebarSvg = document.getElementById('sidebarLogoSvg');
+  const sidebarImg = document.getElementById('sidebarLogoImg');
+  if (sidebarSvg && sidebarImg) {
+    if (logo) {
+      sidebarSvg.style.display = 'none';
+      sidebarImg.src = logo;
+      sidebarImg.style.display = '';
+    } else {
+      sidebarSvg.style.display = '';
+      sidebarImg.style.display = 'none';
+    }
+  }
+
+  // Update header atas logo (headerLogoBadge & headerLogoImg)
+  const headerLogoBadge = document.getElementById('headerLogoBadge');
+  const headerLogoImg = document.getElementById('headerLogoImg');
+  if (headerLogoImg) {
+    if (logo) {
+      headerLogoImg.src = logo;
+      if (headerLogoBadge) headerLogoBadge.style.display = 'flex';
+    } else {
+      headerLogoImg.src = '';
+      if (headerLogoBadge) headerLogoBadge.style.display = 'none';
+    }
+  }
+
+  // Update login page branding
+  const loginName = document.getElementById('loginBrandName');
+  if (loginName) loginName.textContent = name;
+  const loginSvg = document.getElementById('loginLogoSvg');
+  const loginImg = document.getElementById('loginLogoImg');
+  if (loginSvg && loginImg) {
+    if (logo) {
+      loginSvg.style.display = 'none';
+      loginImg.src = logo;
+      loginImg.style.display = '';
+    } else {
+      loginSvg.style.display = '';
+      loginImg.style.display = 'none';
+    }
+  }
+
+  // Update settings form fields
+  const cfgName = document.getElementById('cfgCafeName');
+  if (cfgName) cfgName.value = name;
+  const cfgAddr = document.getElementById('cfgCafeAddress');
+  if (cfgAddr) cfgAddr.value = address;
+  const cfgPhone = document.getElementById('cfgCafePhone');
+  if (cfgPhone) cfgPhone.value = State.settings.phone || '';
+  const cfgWifiName = document.getElementById('cfgWifiName');
+  if (cfgWifiName) cfgWifiName.value = State.settings.wifiName || '';
+  const cfgWifiPass = document.getElementById('cfgWifiPassword');
+  if (cfgWifiPass) cfgWifiPass.value = State.settings.wifiPassword || '';
+  const cfgTax = document.getElementById('cfgTaxRate');
+  if (cfgTax) cfgTax.value = State.settings.taxRate || 0;
+  const cfgFooter = document.getElementById('cfgReceiptFooter');
+  if (cfgFooter) cfgFooter.value = State.settings.footerMessage || '';
+
+  // Update logo preview in settings
+  const preview = document.getElementById('cfgLogoPreview');
+  const placeholder = document.getElementById('logoUploadPlaceholder');
+  const btnRemove = document.getElementById('btnRemoveLogo');
+  if (preview && placeholder) {
+    if (logo) {
+      preview.src = logo;
+      preview.style.display = '';
+      placeholder.style.display = 'none';
+      if (btnRemove) btnRemove.style.display = '';
+    } else {
+      preview.src = '';
+      preview.style.display = 'none';
+      placeholder.style.display = '';
+      if (btnRemove) btnRemove.style.display = 'none';
+    }
+  }
+
+  // Update browser tab title
+  document.title = `${name} - Sistem Kasir & Manajemen POS`;
 }
 
 async function saveCafeSettings() {
-  const newSet = {
-    nama_kafe: document.getElementById('cfgCafeName').value.trim(),
-    alamat: document.getElementById('cfgCafeAddress').value.trim(),
-    telepon: document.getElementById('cfgCafePhone').value.trim(),
-    wifi_info: document.getElementById('cfgCafeWifi').value.trim(),
-    pajak: Number(document.getElementById('cfgTaxRate').value) || 0,
-    footer_struk: document.getElementById('cfgReceiptFooter').value.trim()
-  };
-
   try {
+    // Upload logo jika ada file baru dipilih
+    const logoInput = document.getElementById('cfgLogoInput');
+    let logoUrl = State.settings.logoUrl || '';
+    if (logoInput && logoInput.files && logoInput.files[0]) {
+      showToast('Mengunggah logo kafe...', 'info');
+      const formData = new FormData();
+      formData.append('foto', logoInput.files[0]);
+      const uploadResult = await apiUpload(formData);
+      logoUrl = uploadResult.url || logoUrl;
+    }
+
+    const wifiName = (document.getElementById('cfgWifiName')?.value || '').trim();
+    const wifiPassword = (document.getElementById('cfgWifiPassword')?.value || '').trim();
+    const combinedWifi = wifiName ? (wifiPassword ? `${wifiName} / ${wifiPassword}` : wifiName) : '';
+
+    const newSet = {
+      nama_kafe: document.getElementById('cfgCafeName').value.trim(),
+      alamat: document.getElementById('cfgCafeAddress').value.trim(),
+      telepon: document.getElementById('cfgCafePhone').value.trim(),
+      wifi_nama: wifiName,
+      wifi_password: wifiPassword,
+      wifi_info: combinedWifi,
+      pajak: Number(document.getElementById('cfgTaxRate').value) || 0,
+      footer_struk: document.getElementById('cfgReceiptFooter').value.trim(),
+      logo_url: logoUrl
+    };
+
     const result = await apiRequest('/pengaturan', { method: 'PUT', body: JSON.stringify(newSet) });
     const item = result.data;
     State.settings = {
       cafeName: item.nama_kafe,
       address: item.alamat || '',
       phone: item.telepon || '',
-      wifiInfo: item.wifi_info || '',
+      wifiInfo: item.wifi_info || combinedWifi,
+      wifiName: item.wifi_nama || wifiName,
+      wifiPassword: item.wifi_password || wifiPassword,
       taxRate: Number(item.pajak) || 0,
-      footerMessage: item.footer_struk || ''
+      footerMessage: item.footer_struk || '',
+      logoUrl: item.logo_url || logoUrl
     };
+
+    // Reset file input
+    if (logoInput) logoInput.value = '';
+
     applySettingsToUI();
     renderCartUI();
-    showToast('Pengaturan berhasil disimpan.', 'success');
+    showToast('Pengaturan kafe berhasil disimpan!', 'success');
   } catch (error) {
     showToast(`Gagal menyimpan pengaturan: ${error.message}`, 'danger');
   }
+}
+
+function previewLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Ukuran file terlalu besar. Maksimal 5MB.', 'danger');
+    event.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const preview = document.getElementById('cfgLogoPreview');
+    const placeholder = document.getElementById('logoUploadPlaceholder');
+    const btnRemove = document.getElementById('btnRemoveLogo');
+    if (preview) { preview.src = e.target.result; preview.style.display = ''; }
+    if (placeholder) placeholder.style.display = 'none';
+    if (btnRemove) btnRemove.style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeCafeLogo() {
+  if (!confirm('Hapus logo kafe? Logo akan dihapus setelah Anda menyimpan pengaturan.')) return;
+  State.settings.logoUrl = '';
+  const logoInput = document.getElementById('cfgLogoInput');
+  if (logoInput) logoInput.value = '';
+  const preview = document.getElementById('cfgLogoPreview');
+  const placeholder = document.getElementById('logoUploadPlaceholder');
+  const btnRemove = document.getElementById('btnRemoveLogo');
+  if (preview) { preview.src = ''; preview.style.display = 'none'; }
+  if (placeholder) placeholder.style.display = '';
+  if (btnRemove) btnRemove.style.display = 'none';
+  showToast('Logo dihapus. Klik Simpan untuk mengonfirmasi.', 'info');
 }
 
 
@@ -1460,6 +1972,13 @@ window.addEventListener('DOMContentLoaded', () => {
   updateLiveClock();
   setInterval(updateLiveClock, 1000);
 
+  const clearLoginForm = () => {
+    const uInput = document.getElementById('usernameInput');
+    const pInput = document.getElementById('passwordInput');
+    if (uInput) uInput.value = '';
+    if (pInput) pInput.value = '';
+  };
+
   const savedUser = localStorage.getItem('kg_auth_user');
   if (savedUser) {
     try {
@@ -1469,15 +1988,18 @@ window.addEventListener('DOMContentLoaded', () => {
         initLoggedInState();
       } else {
         localStorage.removeItem('kg_auth_user');
+        clearLoginForm();
         document.getElementById('loginSection').classList.remove('hidden');
         document.getElementById('appContainer').classList.add('hidden');
       }
     } catch (_) {
       localStorage.removeItem('kg_auth_user');
+      clearLoginForm();
       document.getElementById('loginSection').classList.remove('hidden');
       document.getElementById('appContainer').classList.add('hidden');
     }
   } else {
+    clearLoginForm();
     document.getElementById('loginSection').classList.remove('hidden');
     document.getElementById('appContainer').classList.add('hidden');
   }

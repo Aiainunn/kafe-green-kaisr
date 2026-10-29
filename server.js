@@ -1,10 +1,61 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const session = require('express-session');
+const multer = require('multer');
 const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Pastikan kolom gambar ada di tabel menu (PostgreSQL Auto-Migration)
+db.query('ALTER TABLE menu ADD COLUMN IF NOT EXISTS gambar text')
+    .then(() => console.log('✅ Kolom gambar pada tabel menu siap digunakan.'))
+    .catch(err => console.warn('⚠️ Cek kolom gambar:', err.message));
+
+// Pastikan kolom pengaturan baru ada (PostgreSQL Auto-Migration)
+db.query('ALTER TABLE pengaturan ADD COLUMN IF NOT EXISTS wifi_nama text')
+    .then(() => console.log('✅ Kolom wifi_nama pada tabel pengaturan siap digunakan.'))
+    .catch(err => console.warn('⚠️ Cek kolom wifi_nama:', err.message));
+
+db.query('ALTER TABLE pengaturan ADD COLUMN IF NOT EXISTS wifi_password text')
+    .then(() => console.log('✅ Kolom wifi_password pada tabel pengaturan siap digunakan.'))
+    .catch(err => console.warn('⚠️ Cek kolom wifi_password:', err.message));
+
+db.query('ALTER TABLE pengaturan ADD COLUMN IF NOT EXISTS logo_url text')
+    .then(() => console.log('✅ Kolom logo_url pada tabel pengaturan siap digunakan.'))
+    .catch(err => console.warn('⚠️ Cek kolom logo_url:', err.message));
+
+// Konfigurasi Multer untuk Upload Foto Menu
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'menu-' + uniqueSuffix + ext);
+    }
+});
+
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // Maksimal 5MB
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|webp|gif/;
+        const mimeCheck = allowedTypes.test(file.mimetype);
+        const extCheck = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimeCheck && extCheck) {
+            return cb(null, true);
+        }
+        cb(new Error('Format file harus berupa gambar (JPG, PNG, WEBP, atau GIF).'));
+    }
+});
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'kafe-green-session-secret',
@@ -17,7 +68,7 @@ app.use(session({
     }
 }));
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {
@@ -94,6 +145,34 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ============================================================
+// UPLOAD FOTO MENU / LOGO KAFE
+// ============================================================
+app.post('/api/upload', requireManager, (req, res) => {
+    upload.any()(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return sendError(res, 400, 'Ukuran foto maksimal 5MB.');
+            }
+            return sendError(res, 400, `Gagal upload: ${err.message}`);
+        } else if (err) {
+            return sendError(res, 400, err.message);
+        }
+
+        const uploadedFile = req.file || (req.files && req.files[0]);
+        if (!uploadedFile) {
+            return sendError(res, 400, 'Tidak ada file gambar yang dipilih.');
+        }
+
+        const fileUrl = `/uploads/${uploadedFile.filename}`;
+        res.json({
+            berhasil: true,
+            pesan: 'Foto berhasil diunggah.',
+            url: fileUrl
+        });
+    });
+});
+
+// ============================================================
 // MENU
 // ============================================================
 app.get('/api/menu', async (req, res) => {
@@ -106,6 +185,7 @@ app.get('/api/menu', async (req, res) => {
                 menu.deskripsi,
                 menu.tersedia,
                 menu.kategori_id,
+                menu.gambar,
                 kategori.nama AS kategori
             FROM menu
             INNER JOIN kategori ON menu.kategori_id = kategori.id
@@ -118,41 +198,40 @@ app.get('/api/menu', async (req, res) => {
     }
 });
 
-app.post('/api/menu',requireManager, async (req, res) => {
-    const { nama, kategori_id, harga, deskripsi, tersedia } = req.body;
+app.post('/api/menu', requireManager, async (req, res) => {
+    const { nama, kategori_id, harga, deskripsi, tersedia, gambar } = req.body;
 
     if (!nama || !kategori_id || harga === undefined) {
         return sendError(res, 400, 'Nama, kategori, dan harga wajib diisi.');
     }
 
+    try {
+        const [rows] = await db.execute(`
+            INSERT INTO menu
+                (kategori_id, nama, harga, deskripsi, tersedia, gambar)
+            VALUES (?, ?, ?, ?, ?, ?)
+            RETURNING id
+        `, [
+            kategori_id,
+            nama,
+            Number(harga),
+            deskripsi || '',
+            tersedia !== undefined ? Boolean(tersedia) : true,
+            gambar || null
+        ]);
 
-try {
-    const [rows] = await db.execute(`
-        INSERT INTO menu
-            (kategori_id, nama, harga, deskripsi, tersedia)
-        VALUES (?, ?, ?, ?, ?)
-        RETURNING id
-    `, [
-        kategori_id,
-        nama,
-        Number(harga),
-        deskripsi || '',
-        tersedia !== undefined ? Boolean(tersedia) : true
-    ]);
-
-    res.json({
-        berhasil: true,
-        pesan: 'Menu berhasil ditambahkan.',
-        id: rows[0].id
-    });
-} catch (err) {
-    sendError(res, 500, 'Gagal menambahkan menu.', err);
-}
-
+        res.json({
+            berhasil: true,
+            pesan: 'Menu berhasil ditambahkan.',
+            id: rows[0].id
+        });
+    } catch (err) {
+        sendError(res, 500, 'Gagal menambahkan menu.', err);
+    }
 });
 
 app.put('/api/menu/:id', requireManager, async (req, res) => {
-    const { nama, kategori_id, harga, deskripsi, tersedia } = req.body;
+    const { nama, kategori_id, harga, deskripsi, tersedia, gambar } = req.body;
 
     if (!nama || !kategori_id || harga === undefined) {
         return sendError(res, 400, 'Nama, kategori, dan harga wajib diisi.');
@@ -161,7 +240,7 @@ app.put('/api/menu/:id', requireManager, async (req, res) => {
     try {
         const [rows] = await db.execute(`
             UPDATE menu
-            SET kategori_id = ?, nama = ?, harga = ?, deskripsi = ?, tersedia = ?
+            SET kategori_id = ?, nama = ?, harga = ?, deskripsi = ?, tersedia = ?, gambar = ?
             WHERE id = ?
             RETURNING id
         `, [
@@ -170,6 +249,7 @@ app.put('/api/menu/:id', requireManager, async (req, res) => {
             Number(harga),
             deskripsi || '',
             Boolean(tersedia),
+            gambar !== undefined ? (gambar || null) : null,
             req.params.id
         ]);
 
@@ -237,8 +317,11 @@ const DEFAULT_SETTINGS_DB = {
     alamat: '',
     telepon: '',
     wifi_info: '',
+    wifi_nama: '',
+    wifi_password: '',
     pajak: 0,
-    footer_struk: 'Terima kasih telah berkunjung ke Kafe Green'
+    footer_struk: 'Terima kasih telah berkunjung ke Kafe Green',
+    logo_url: ''
 };
 
 app.get('/api/pengaturan', async (req, res) => {
@@ -251,19 +334,22 @@ app.get('/api/pengaturan', async (req, res) => {
 
         const [result] = await db.execute(`
             INSERT INTO pengaturan
-            (nama_kafe, alamat, telepon, wifi_info, pajak, footer_struk)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (nama_kafe, alamat, telepon, wifi_info, wifi_nama, wifi_password, pajak, footer_struk, logo_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING *
         `, [
             DEFAULT_SETTINGS_DB.nama_kafe,
             DEFAULT_SETTINGS_DB.alamat,
             DEFAULT_SETTINGS_DB.telepon,
             DEFAULT_SETTINGS_DB.wifi_info,
+            DEFAULT_SETTINGS_DB.wifi_nama,
+            DEFAULT_SETTINGS_DB.wifi_password,
             DEFAULT_SETTINGS_DB.pajak,
-            DEFAULT_SETTINGS_DB.footer_struk
+            DEFAULT_SETTINGS_DB.footer_struk,
+            DEFAULT_SETTINGS_DB.logo_url
         ]);
 
-        const [created] = await db.execute('SELECT * FROM pengaturan WHERE id = ?', [result.insertId]);
-        res.json({ berhasil: true, data: created[0] });
+        res.json({ berhasil: true, data: result[0] || DEFAULT_SETTINGS_DB });
     } catch (err) {
         sendError(res, 500, 'Gagal mengambil pengaturan.', err);
     }
@@ -275,13 +361,21 @@ app.put('/api/pengaturan', async (req, res) => {
         alamat = '',
         telepon = '',
         wifi_info = '',
+        wifi_nama = '',
+        wifi_password = '',
         pajak = 0,
-        footer_struk = ''
+        footer_struk = '',
+        logo_url = ''
     } = req.body;
 
     if (!nama_kafe) {
         return sendError(res, 400, 'Nama kafe wajib diisi.');
     }
+
+    // Buat wifi_info tetap sinkron jika wifi_nama diisi
+    const combinedWifi = wifi_nama
+        ? (wifi_password ? `${wifi_nama} / ${wifi_password}` : wifi_nama)
+        : wifi_info;
 
     try {
         const [rows] = await db.execute('SELECT id FROM pengaturan ORDER BY id ASC LIMIT 1');
@@ -290,17 +384,18 @@ app.put('/api/pengaturan', async (req, res) => {
         if (rows.length === 0) {
             const [result] = await db.execute(`
                 INSERT INTO pengaturan
-                (nama_kafe, alamat, telepon, wifi_info, pajak, footer_struk)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `, [nama_kafe, alamat, telepon, wifi_info, Number(pajak) || 0, footer_struk]);
-            id = result.insertId;
+                (nama_kafe, alamat, telepon, wifi_info, wifi_nama, wifi_password, pajak, footer_struk, logo_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
+            `, [nama_kafe, alamat, telepon, combinedWifi, wifi_nama, wifi_password, Number(pajak) || 0, footer_struk, logo_url]);
+            id = result[0]?.id;
         } else {
             id = rows[0].id;
             await db.execute(`
                 UPDATE pengaturan
-                SET nama_kafe = ?, alamat = ?, telepon = ?, wifi_info = ?, pajak = ?, footer_struk = ?
+                SET nama_kafe = ?, alamat = ?, telepon = ?, wifi_info = ?, wifi_nama = ?, wifi_password = ?, pajak = ?, footer_struk = ?, logo_url = ?
                 WHERE id = ?
-            `, [nama_kafe, alamat, telepon, wifi_info, Number(pajak) || 0, footer_struk, id]);
+            `, [nama_kafe, alamat, telepon, combinedWifi, wifi_nama, wifi_password, Number(pajak) || 0, footer_struk, logo_url, id]);
         }
 
         const [updated] = await db.execute('SELECT * FROM pengaturan WHERE id = ?', [id]);
