@@ -26,6 +26,7 @@ const State = {
   menu: [],
   cart: [],
   transactions: [],
+  users: [],
   settings: { ...DEFAULT_SETTINGS },
   soundEnabled: true,
   currentCategory: 'all',
@@ -176,7 +177,8 @@ function normalizeTransaction(tx) {
     ...tx,
     orderNumber: tx.orderNumber || tx.nomor_transaksi,
     timestamp: tx.timestamp || tx.tanggal,
-    cashier: tx.cashier || tx.kasir || 'Kasir Kafe',
+    cashier: tx.cashier || tx.nama_kasir || tx.kasir || 'Kasir',
+    note: tx.note || tx.catatan || '',
     orderType: tx.orderType || (tx.tipe_pesanan === 'take_away' ? 'Take Away' : 'Dine In'),
     tableNumber: tx.tableNumber || tx.nomor_meja || '-',
     paymentMethod: tx.paymentMethod || (tx.metode_pembayaran === 'qris' ? 'QRIS' : 'Tunai'),
@@ -272,6 +274,7 @@ function refreshCurrentView() {
   if (State.activeView === 'menuManage') renderManageMenuGrid();
   if (State.activeView === 'history') renderHistoryTable();
   if (State.activeView === 'reports') renderReportsView();
+  if (State.activeView === 'settings') loadAccountsToSettings();
 }
 
 // --- AUTHENTICATION ---
@@ -390,14 +393,10 @@ function initLoggedInState() {
 
   document.getElementById('appContainer').classList.remove('hidden');
 
-  document.getElementById('userNameLabel').textContent =
-    State.currentUser.displayName;
-
   document.getElementById('userRoleLabel').textContent =
     State.currentUser.role;
 
-  document.getElementById('userAvatar').textContent =
-    State.currentUser.displayName.charAt(0).toUpperCase();
+  updateAllCashierNameDisplays(State.currentUser.displayName || 'Kasir');
 
   // Terapkan hak akses berdasarkan role
   applyRolePermissions();
@@ -687,7 +686,10 @@ function renderDashboardRecentOrders(todayOrders) {
         <td class="td-order-id">${t.orderNumber}</td>
         <td>${timeStr}</td>
         <td><span class="badge-tag ${t.orderType === 'Dine In' ? 'badge-blue' : 'badge-amber'}">${t.orderType}</span></td>
-        <td style="max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${itemsPreview}">${itemsPreview}</td>
+        <td style="max-width: 250px;">
+          <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(itemsPreview)}">${itemsPreview}</div>
+          ${t.note ? `<div style="font-size: 0.73rem; color: #047857; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Catatan: ${escapeHtml(t.note)}">📝 <em>${escapeHtml(t.note)}</em></div>` : ''}
+        </td>
         <td><span class="badge-tag badge-gray">${t.paymentMethod}</span></td>
         <td class="td-price">${formatRupiah(t.grandTotal)}</td>
         <td><button class="btn btn-ghost btn-xs" onclick="viewReceiptByNumber('${t.orderNumber}')">Lihat Struk</button></td>
@@ -844,6 +846,8 @@ function clearCartConfirm() {
   if (State.cart.length === 0) return;
   if (confirm('Kosongkan semua pesanan di keranjang?')) {
     State.cart = [];
+    const noteEl = document.getElementById('orderNoteInput');
+    if (noteEl) noteEl.value = '';
     renderCartUI();
     showToast('Keranjang dikosongkan.', 'info');
   }
@@ -968,9 +972,14 @@ async function processOrder() {
   }
 
   const tableValue = document.getElementById('orderTableInput').value.trim();
+  const noteValue = document.getElementById('orderNoteInput')?.value.trim() || '';
+  const cashierInput = document.getElementById('orderCashierInput')?.value.trim();
+  const cashierName = cashierInput || State.currentUser?.displayName || 'Kasir';
 
   const payload = {
-    pengguna_id: State.currentUser?.id || null,
+    pengguna_id: State.currentUser?.id || 1,
+    nama_kasir: cashierName,
+    catatan: noteValue,
     tipe_pesanan: State.orderType === 'Take Away' ? 'take_away' : 'dine_in',
     nomor_meja: tableValue || (State.orderType === 'Dine In' ? 'Meja 01' : 'Bungkus'),
     subtotal,
@@ -1004,6 +1013,8 @@ async function processOrder() {
 
     State.cart = [];
     document.getElementById('cashGivenInput').value = '';
+    const noteEl = document.getElementById('orderNoteInput');
+    if (noteEl) noteEl.value = '';
     renderCartUI();
     document.getElementById('cartOrderNo').textContent = `Order #${generateOrderNumber()}`;
     refreshCurrentView();
@@ -1067,8 +1078,21 @@ function openReceiptModal(order) {
   document.getElementById('recOrderNumber').textContent = `#${order.orderNumber}`;
   document.getElementById('recBarcodeId').textContent = `*${order.orderNumber}*`;
   document.getElementById('recOrderDate').textContent = formatDateIndo(order.timestamp);
-  document.getElementById('recCashierName').textContent = order.cashier;
+  document.getElementById('recCashierName').textContent = order.cashier || 'Kasir';
   document.getElementById('recOrderType').textContent = `${order.orderType} (${order.tableNumber})`;
+
+  // Tampilkan catatan di metadata struk
+  const recMetaNoteRow = document.getElementById('recMetaNoteRow');
+  const recMetaNote = document.getElementById('recMetaNote');
+  if (recMetaNoteRow && recMetaNote) {
+    if (order.note && order.note.trim()) {
+      recMetaNoteRow.style.display = 'flex';
+      recMetaNote.textContent = order.note.trim();
+    } else {
+      recMetaNoteRow.style.display = 'none';
+      recMetaNote.textContent = '';
+    }
+  }
 
   document.getElementById('recItemsList').innerHTML = order.items.map(item => `
     <div class="receipt-item-entry">
@@ -1078,6 +1102,19 @@ function openReceiptModal(order) {
         <span>${formatRupiah(item.subtotal)}</span>
       </div>
     </div>`).join('');
+
+  // Tampilkan catatan pesanan jika ada
+  const recNoteRow = document.getElementById('recNoteRow');
+  const recNoteText = document.getElementById('recNoteText');
+  if (recNoteRow && recNoteText) {
+    if (order.note && order.note.trim()) {
+      recNoteRow.style.display = 'block';
+      recNoteText.textContent = order.note.trim();
+    } else {
+      recNoteRow.style.display = 'none';
+      recNoteText.textContent = '';
+    }
+  }
 
   document.getElementById('recSubtotal').textContent = formatRupiah(order.subtotal);
   const taxRow = document.getElementById('recTaxRow');
@@ -1130,6 +1167,7 @@ function copyReceiptText() {
   const wifiStr = (State.settings.wifiName || State.settings.wifiPassword)
     ? `\nWi-Fi: ${State.settings.wifiName || '-'} | Password: ${State.settings.wifiPassword || '-'}`
     : (State.settings.wifiInfo ? `\nWi-Fi: ${State.settings.wifiInfo}` : '');
+  const noteStr = o.note && o.note.trim() ? `\nCatatan: ${o.note.trim()}` : '';
 
   const text = `
 === ${State.settings.cafeName.toUpperCase()} ===
@@ -1139,7 +1177,7 @@ Tgl: ${formatDateIndo(o.timestamp)}
 Kasir: ${o.cashier}
 Tipe: ${o.orderType} (${o.tableNumber})
 --------------------------------
-${o.items.map(i => `${i.name}\n${i.qty} x ${formatRupiah(i.price)} = ${formatRupiah(i.subtotal)}`).join('\n')}
+${o.items.map(i => `${i.name}\n${i.qty} x ${formatRupiah(i.price)} = ${formatRupiah(i.subtotal)}`).join('\n')}${noteStr ? '\n--------------------------------' + noteStr : ''}
 --------------------------------
 Subtotal: ${formatRupiah(o.subtotal)}
 ${o.tax > 0 ? `PPN (${taxRate}%): ${formatRupiah(o.tax)}\n` : ''}TOTAL: ${formatRupiah(o.grandTotal)}
@@ -1586,7 +1624,10 @@ function renderHistoryTable() {
       <td>${formatDateIndo(t.timestamp)}</td>
       <td>${t.cashier}</td>
       <td><span class="badge-tag ${t.orderType === 'Dine In' ? 'badge-blue' : 'badge-amber'}">${t.orderType}</span></td>
-      <td style="max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${itemsPreview}</td>
+      <td style="max-width: 220px;">
+        <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(itemsPreview)}">${itemsPreview}</div>
+        ${t.note ? `<div style="font-size: 0.73rem; color: #047857; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Catatan: ${escapeHtml(t.note)}">📝 <em>${escapeHtml(t.note)}</em></div>` : ''}
+      </td>
       <td><span class="badge-tag badge-gray">${t.paymentMethod}</span></td>
       <td class="td-price">${formatRupiah(t.grandTotal)}</td>
       <td>${formatRupiah(t.paidAmount)}</td>
@@ -1958,6 +1999,225 @@ function applyResponsiveStyles() {
     }
   `;
   document.head.appendChild(style);
+}
+
+// ============================================================
+// PROFILE & KASIR NAME MANAGEMENT
+// ============================================================
+function updateAllCashierNameDisplays(name) {
+  if (!name) return;
+  const nameLabel = document.getElementById('userNameLabel');
+  if (nameLabel) nameLabel.textContent = name;
+
+  const avatar = document.getElementById('userAvatar');
+  if (avatar) avatar.textContent = name.charAt(0).toUpperCase();
+
+  const cartCashier = document.getElementById('cartCashierDisplay');
+  if (cartCashier) cartCashier.textContent = name;
+
+  const orderCashierInput = document.getElementById('orderCashierInput');
+  if (orderCashierInput && document.activeElement !== orderCashierInput) {
+    orderCashierInput.value = name;
+  }
+}
+
+async function saveActiveCashierName() {
+  const input = document.getElementById('orderCashierInput');
+  const newName = input ? input.value.trim() : '';
+
+  if (!newName) {
+    showToast('Nama kasir tidak boleh kosong.', 'danger');
+    return;
+  }
+
+  const userId = State.currentUser?.id || 'me';
+  try {
+    const result = await apiRequest(`/pengguna/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nama: newName })
+    });
+
+    const updatedUser = result.data;
+    if (State.currentUser) {
+      State.currentUser.displayName = updatedUser.nama;
+      localStorage.setItem('kg_auth_user', JSON.stringify(State.currentUser));
+    }
+    updateAllCashierNameDisplays(updatedUser.nama);
+    showToast(`Nama kasir berhasil disimpan permanen: "${updatedUser.nama}"!`, 'success');
+  } catch (error) {
+    console.error('Gagal menyimpan nama kasir:', error);
+    showToast(`Gagal menyimpan nama kasir: ${error.message}`, 'danger');
+  }
+}
+
+function openEditProfileModal() {
+  if (!State.currentUser) return;
+  const modal = document.getElementById('userProfileModal');
+  if (!modal) return;
+
+  const uInput = document.getElementById('profileUsernameInput');
+  const rInput = document.getElementById('profileRoleInput');
+  const dInput = document.getElementById('profileDisplayNameInput');
+
+  if (uInput) uInput.value = State.currentUser.username || '-';
+  if (rInput) rInput.value = State.currentUser.role || '-';
+  if (dInput) dInput.value = State.currentUser.displayName || '';
+
+  modal.classList.remove('hidden');
+  setTimeout(() => {
+    if (dInput) {
+      dInput.focus();
+      dInput.select();
+    }
+  }, 80);
+}
+
+function closeEditProfileModal() {
+  const modal = document.getElementById('userProfileModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function saveUserProfile() {
+  if (!State.currentUser) return;
+  const dInput = document.getElementById('profileDisplayNameInput');
+  const newName = dInput ? dInput.value.trim() : '';
+
+  if (!newName) {
+    showToast('Nama kasir tidak boleh kosong.', 'danger');
+    return;
+  }
+
+  const userId = State.currentUser?.id || 'me';
+  try {
+    const result = await apiRequest(`/pengguna/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nama: newName })
+    });
+
+    const updatedUser = result.data;
+    State.currentUser.displayName = updatedUser.nama;
+    localStorage.setItem('kg_auth_user', JSON.stringify(State.currentUser));
+
+    updateAllCashierNameDisplays(updatedUser.nama);
+
+    closeEditProfileModal();
+    showToast(`Nama berhasil diubah menjadi "${updatedUser.nama}". Nama ini akan tercetak di struk!`, 'success');
+
+    if (State.activeView === 'settings') {
+      loadAccountsToSettings();
+    }
+  } catch (error) {
+    console.error('Gagal memperbarui nama profil:', error);
+    showToast(`Gagal menyimpan nama: ${error.message}`, 'danger');
+  }
+}
+
+async function loadAccountsToSettings() {
+  const container = document.getElementById('accountsSettingsList');
+  if (!container) return;
+
+  try {
+    const result = await apiRequest('/pengguna');
+    const users = result.data || [];
+    State.users = users;
+
+    if (users.length === 0) {
+      container.innerHTML = '<p class="text-muted" style="padding: 12px;">Tidak ada akun ditemukan.</p>';
+      return;
+    }
+
+    container.innerHTML = users.map(u => {
+      const isCurrent = State.currentUser && String(State.currentUser.id) === String(u.id);
+      const roleLabel = u.peran === 'manager' ? 'Manager / Admin' : 'Staff Kasir';
+      return `
+        <div class="account-setting-item" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:14px; background:var(--kg-card-bg, #ffffff); border:1px solid var(--kg-border, #e5e7eb); border-radius:var(--radius-md, 10px); margin-bottom:10px;">
+          <div style="flex:1; min-width:200px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <strong style="font-size:0.95rem;">${escapeHtml(u.username)}</strong>
+              <span class="badge-tag ${u.peran === 'manager' ? 'badge-blue' : 'badge-green'}" style="font-size:0.75rem;">${roleLabel}</span>
+              ${isCurrent ? '<span class="badge-tag badge-amber" style="font-size:0.7rem;">Akun Anda</span>' : ''}
+            </div>
+            <small class="text-muted" style="font-size:0.75rem;">Nama yang tercetak di struk saat login sebagai akun ini</small>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:240px; max-width:400px;">
+            <input type="text" id="accNameInput_${u.id}" class="form-control" value="${escapeHtml(u.nama || '')}" placeholder="Nama kasir di struk" style="padding:7px 10px; font-size:0.85rem; border-radius:6px; border:1px solid var(--kg-border); flex:1;">
+            <button type="button" class="btn btn-emerald btn-sm" onclick="saveSingleAccountName('${u.id}')">
+              Simpan
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Gagal memuat akun pengguna:', error);
+    container.innerHTML = `<p class="text-danger" style="padding: 12px;">Gagal memuat daftar akun: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function saveAccountsFromSettings() {
+  const inputs = document.querySelectorAll('[id^="accNameInput_"]');
+  if (inputs.length === 0) return;
+
+  let successCount = 0;
+  for (const input of inputs) {
+    const userId = input.id.replace('accNameInput_', '');
+    const newName = input.value.trim();
+    if (!newName) continue;
+
+    try {
+      const result = await apiRequest(`/pengguna/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ nama: newName })
+      });
+      successCount++;
+
+      const updatedUser = result.data;
+      if (State.currentUser && String(State.currentUser.id) === String(userId)) {
+        State.currentUser.displayName = updatedUser.nama;
+        localStorage.setItem('kg_auth_user', JSON.stringify(State.currentUser));
+        updateAllCashierNameDisplays(updatedUser.nama);
+      }
+    } catch (err) {
+      console.error(`Gagal update akun ${userId}:`, err);
+    }
+  }
+
+  if (successCount > 0) {
+    showToast(`${successCount} nama akun berhasil disimpan ke database!`, 'success');
+    loadAccountsToSettings();
+  } else {
+    showToast('Tidak ada perubahan nama yang disimpan.', 'info');
+  }
+}
+
+async function saveSingleAccountName(userId) {
+  const input = document.getElementById(`accNameInput_${userId}`);
+  const newName = input ? input.value.trim() : '';
+
+  if (!newName) {
+    showToast('Nama kasir tidak boleh kosong.', 'danger');
+    return;
+  }
+
+  try {
+    const result = await apiRequest(`/pengguna/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ nama: newName })
+    });
+
+    const updatedUser = result.data;
+
+    if (State.currentUser && String(State.currentUser.id) === String(userId)) {
+      State.currentUser.displayName = updatedUser.nama;
+      localStorage.setItem('kg_auth_user', JSON.stringify(State.currentUser));
+      updateAllCashierNameDisplays(updatedUser.nama);
+    }
+
+    showToast(`Nama akun "${updatedUser.username}" berhasil diubah menjadi "${updatedUser.nama}"!`, 'success');
+  } catch (error) {
+    console.error('Gagal memperbarui nama akun:', error);
+    showToast(`Gagal menyimpan nama: ${error.message}`, 'danger');
+  }
 }
 
 // ============================================================

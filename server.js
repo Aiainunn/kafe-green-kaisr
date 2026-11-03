@@ -26,6 +26,16 @@ db.query('ALTER TABLE pengaturan ADD COLUMN IF NOT EXISTS logo_url text')
     .then(() => console.log('✅ Kolom logo_url pada tabel pengaturan siap digunakan.'))
     .catch(err => console.warn('⚠️ Cek kolom logo_url:', err.message));
 
+// Pastikan kolom catatan ada di tabel transaksi (PostgreSQL Auto-Migration)
+db.query('ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS catatan text')
+    .then(() => console.log('✅ Kolom catatan pada tabel transaksi siap digunakan.'))
+    .catch(err => console.warn('⚠️ Cek kolom catatan:', err.message));
+
+// Pastikan kolom nama_kasir ada di tabel transaksi (PostgreSQL Auto-Migration)
+db.query('ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS nama_kasir text')
+    .then(() => console.log('✅ Kolom nama_kasir pada tabel transaksi siap digunakan.'))
+    .catch(err => console.warn('⚠️ Cek kolom nama_kasir:', err.message));
+
 // Konfigurasi Multer untuk Upload Foto Menu
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -141,6 +151,86 @@ app.post('/api/auth/login', async (req, res) => {
         });
     } catch (err) {
         sendError(res, 500, 'Gagal melakukan login.', err);
+    }
+});
+
+// ============================================================
+// PENGGUNA (USERS & NAMA KASIR)
+// ============================================================
+app.get('/api/pengguna', async (req, res) => {
+    try {
+        const [rows] = await db.execute(`
+            SELECT id, username, nama, peran
+            FROM pengguna
+            ORDER BY id ASC
+        `);
+        res.json({ berhasil: true, data: rows });
+    } catch (err) {
+        sendError(res, 500, 'Gagal mengambil data pengguna.', err);
+    }
+});
+
+app.put('/api/pengguna/:id', async (req, res) => {
+    const { nama, password } = req.body;
+    const rawId = String(req.params.id || '').trim();
+
+    if (!nama || !nama.trim()) {
+        return sendError(res, 400, 'Nama pengguna wajib diisi.');
+    }
+
+    try {
+        let sqlWhere = 'WHERE id = ?';
+        let param = rawId;
+
+        if (rawId === 'undefined' || rawId === 'null' || rawId === 'me' || rawId === 'self' || rawId === '') {
+            if (req.session?.user?.id) {
+                param = req.session.user.id;
+            } else if (req.session?.user?.username) {
+                sqlWhere = 'WHERE username = ?';
+                param = req.session.user.username;
+            } else {
+                param = 1;
+            }
+        } else if (isNaN(Number(rawId))) {
+            // Jika dikirim username (misal 'admin' atau 'kasir')
+            sqlWhere = 'WHERE username = ?';
+            param = rawId;
+        }
+
+        let rows;
+        if (password && password.trim()) {
+            const [result] = await db.execute(`
+                UPDATE pengguna
+                SET nama = ?, password = ?, updated_at = NOW()
+                ${sqlWhere}
+                RETURNING id, username, nama, peran
+            `, [nama.trim(), password.trim(), param]);
+            rows = result;
+        } else {
+            const [result] = await db.execute(`
+                UPDATE pengguna
+                SET nama = ?, updated_at = NOW()
+                ${sqlWhere}
+                RETURNING id, username, nama, peran
+            `, [nama.trim(), param]);
+            rows = result;
+        }
+
+        if (rows.length === 0) {
+            return sendError(res, 404, 'Pengguna tidak ditemukan.');
+        }
+
+        if (req.session?.user && (String(req.session.user.id) === String(rows[0].id) || req.session.user.username === rows[0].username)) {
+            req.session.user.nama = rows[0].nama;
+        }
+
+        res.json({
+            berhasil: true,
+            pesan: 'Nama pengguna berhasil diperbarui.',
+            data: rows[0]
+        });
+    } catch (err) {
+        sendError(res, 500, 'Gagal memperbarui pengguna: ' + err.message, err);
     }
 });
 
@@ -435,9 +525,10 @@ app.get('/api/transaksi', async (req, res) => {
                 t.dibayar,
                 t.kembalian,
                 t.metode_pembayaran,
-                p.nama AS kasir
+                t.catatan,
+                COALESCE(t.nama_kasir, p.nama, 'Kasir') AS kasir
             FROM transaksi t
-            INNER JOIN pengguna p ON t.pengguna_id = p.id
+            LEFT JOIN pengguna p ON t.pengguna_id = p.id
             ORDER BY t.tanggal DESC, t.id DESC
             LIMIT ${limit}
         `);
@@ -486,6 +577,7 @@ app.get('/api/transaksi', async (req, res) => {
             grandTotal: Number(t.total),
             paidAmount: Number(t.dibayar),
             changeAmount: Number(t.kembalian),
+            note: t.catatan || '',
             items: detailMap[t.id] || []
         }));
 
@@ -499,6 +591,8 @@ app.post('/api/transaksi', async (req, res) => {
     const {
         nomor_transaksi,
         pengguna_id,
+        nama_kasir,
+        catatan,
         tipe_pesanan,
         nomor_meja,
         subtotal,
@@ -510,8 +604,10 @@ app.post('/api/transaksi', async (req, res) => {
         items
     } = req.body;
 
-    if (!pengguna_id || !Array.isArray(items) || items.length === 0) {
-        return sendError(res, 400, 'Data pengguna dan item transaksi wajib diisi.');
+    const safePenggunaId = Number(pengguna_id) || (req.session?.user?.id ? Number(req.session.user.id) : 1);
+
+    if (!Array.isArray(items) || items.length === 0) {
+        return sendError(res, 400, 'Item transaksi wajib diisi.');
     }
 
     const connection = await db.getConnection();
@@ -526,12 +622,24 @@ app.post('/api/transaksi', async (req, res) => {
         const safePayment =
             metode_pembayaran === 'qris' ? 'qris' : 'cash';
 
+        let finalCashier = (nama_kasir || '').trim();
+        if (!finalCashier) {
+            const [userRows] = await connection.execute(
+                'SELECT nama FROM pengguna WHERE id = ?',
+                [safePenggunaId]
+            );
+            finalCashier = userRows[0]?.nama || 'Kasir';
+        }
+
+        const safeCatatan = (catatan || '').trim() || null;
+
         // Simpan transaksi utama
         const [txResult] = await connection.execute(`
             INSERT INTO transaksi
             (
                 nomor_transaksi,
                 pengguna_id,
+                nama_kasir,
                 tipe_pesanan,
                 nomor_meja,
                 subtotal,
@@ -539,13 +647,15 @@ app.post('/api/transaksi', async (req, res) => {
                 total,
                 dibayar,
                 kembalian,
-                metode_pembayaran
+                metode_pembayaran,
+                catatan
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
         `, [
             orderNumber,
-            pengguna_id,
+            safePenggunaId,
+            finalCashier,
             safeOrderType,
             nomor_meja || null,
             Number(subtotal) || 0,
@@ -553,7 +663,8 @@ app.post('/api/transaksi', async (req, res) => {
             Number(total) || 0,
             Number(dibayar) || 0,
             Number(kembalian) || 0,
-            safePayment
+            safePayment,
+            safeCatatan
         ]);
 
         // PostgreSQL mengembalikan ID melalui RETURNING
@@ -582,17 +693,11 @@ app.post('/api/transaksi', async (req, res) => {
 
         await connection.commit();
 
-        const [userRows] = await db.execute(
-            'SELECT nama FROM pengguna WHERE id = ?',
-            [pengguna_id]
-        );
-
-        const cashier = userRows[0]?.nama || 'Kasir Kafe';
-
         const saved = {
             orderNumber,
             timestamp: new Date(),
-            cashier,
+            cashier: finalCashier,
+            note: safeCatatan || '',
 
             orderType:
                 safeOrderType === 'take_away'
