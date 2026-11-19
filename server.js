@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
+const crypto = require('crypto');
 const session = require('express-session');
 const multer = require('multer');
 const db = require('./db');
@@ -36,36 +36,73 @@ db.query('ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS nama_kasir text')
     .then(() => console.log('✅ Kolom nama_kasir pada tabel transaksi siap digunakan.'))
     .catch(err => console.warn('⚠️ Cek kolom nama_kasir:', err.message));
 
-// Konfigurasi Multer untuk Upload Foto Menu
-const uploadsDir = path.join(__dirname, 'public', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'menu-' + uniqueSuffix + ext);
-    }
-});
-
+// Konfigurasi upload foto: file disimpan sementara di memori,
+// lalu diteruskan ke Supabase Storage (filesystem Vercel bersifat read-only).
 const upload = multer({
-    storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }, // Maksimal 5MB
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|webp|gif/;
-        const mimeCheck = allowedTypes.test(file.mimetype);
-        const extCheck = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        if (mimeCheck && extCheck) {
+        const allowedMimeTypes = [
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif'
+        ];
+
+        if (allowedMimeTypes.includes(file.mimetype)) {
             return cb(null, true);
         }
+
         cb(new Error('Format file harus berupa gambar (JPG, PNG, WEBP, atau GIF).'));
     }
 });
+
+const IMAGE_EXTENSIONS = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif'
+};
+
+async function uploadImageToSupabase(file) {
+    const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\\/$/, '');
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'kafe-green-assets';
+
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error('Konfigurasi Supabase Storage belum lengkap. Periksa SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di Environment Variables Vercel.');
+    }
+
+    const extension = IMAGE_EXTENSIONS[file.mimetype];
+    if (!extension) {
+        throw new Error('Format gambar tidak didukung.');
+    }
+
+    const fileName = `menu-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    const objectPath = `uploads/${fileName}`;
+    const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`;
+
+    const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`,
+            'Content-Type': file.mimetype,
+            'Cache-Control': '3600',
+            'x-upsert': 'true'
+        },
+        body: file.buffer
+    });
+
+    if (!response.ok) {
+        const detail = await response.text();
+        console.error('Supabase Storage upload error:', response.status, detail);
+        throw new Error(`Supabase Storage menolak upload (HTTP ${response.status}). Periksa bucket dan konfigurasi Storage.`);
+    }
+
+    return `${supabaseUrl}/storage/v1/object/public/${encodeURIComponent(bucket)}/${encodedPath}`;
+}
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'kafe-green-session-secret',
@@ -238,7 +275,7 @@ app.put('/api/pengguna/:id', async (req, res) => {
 // UPLOAD FOTO MENU / LOGO KAFE
 // ============================================================
 app.post('/api/upload', requireManager, (req, res) => {
-    upload.any()(req, res, (err) => {
+    upload.any()(req, res, async (err) => {
         if (err instanceof multer.MulterError) {
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return sendError(res, 400, 'Ukuran foto maksimal 5MB.');
@@ -253,12 +290,21 @@ app.post('/api/upload', requireManager, (req, res) => {
             return sendError(res, 400, 'Tidak ada file gambar yang dipilih.');
         }
 
-        const fileUrl = `/uploads/${uploadedFile.filename}`;
-        res.json({
-            berhasil: true,
-            pesan: 'Foto berhasil diunggah.',
-            url: fileUrl
-        });
+        try {
+            const fileUrl = await uploadImageToSupabase(uploadedFile);
+            return res.json({
+                berhasil: true,
+                pesan: 'Foto berhasil diunggah ke Supabase Storage.',
+                url: fileUrl
+            });
+        } catch (uploadError) {
+            console.error('Gagal mengunggah gambar ke Supabase Storage:', uploadError);
+            return sendError(
+                res,
+                500,
+                uploadError.message || 'Gagal menyimpan foto ke Supabase Storage.'
+            );
+        }
     });
 });
 
