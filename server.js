@@ -65,7 +65,7 @@ const IMAGE_EXTENSIONS = {
 };
 
 async function uploadImageToSupabase(file) {
-    const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\\/$/, '');
+    const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'kafe-green-assets';
 
